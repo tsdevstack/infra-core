@@ -1,0 +1,147 @@
+import { describe, it, expect } from '@rstest/core';
+import { generateWakeupLambdaTf } from './generate-wakeup-lambda-tf';
+
+describe('generateWakeupLambdaTf', () => {
+  describe('Wake-up Secret', () => {
+    it('should create random_password for wakeup_secret', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('resource "random_password" "wakeup_secret"');
+    });
+
+    it('should use 32 character length', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('length  = 32');
+    });
+
+    it('should disable special characters for URL safety', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('special = false');
+    });
+  });
+
+  describe('Lambda code archive', () => {
+    it('should create archive_file data source', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('data "archive_file" "wakeup_lambda"');
+    });
+
+    it('should use lambda/wakeup source directory', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('source_dir  = "${path.module}/lambda/wakeup"');
+    });
+  });
+
+  describe('Lambda function', () => {
+    it('should create Lambda function', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('resource "aws_lambda_function" "wakeup"');
+    });
+
+    it('should use Node.js 22 runtime', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('runtime       = "nodejs22.x"');
+    });
+
+    it('should have 10 second timeout', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('timeout       = 10');
+    });
+
+    it('should pass ECS cluster name as environment variable', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('ECS_CLUSTER = aws_ecs_cluster.main.name');
+    });
+
+    it('should pass managed services as environment variable', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('MANAGED_SERVICES = join(",",');
+      expect(result).toContain('cfg.minInstances == 0');
+    });
+
+    it('should pass WAKEUP_SECRET as environment variable', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain(
+        'WAKEUP_SECRET = random_password.wakeup_secret.result',
+      );
+    });
+  });
+
+  describe('Lambda Function URL', () => {
+    it('should create Lambda Function URL', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('resource "aws_lambda_function_url" "wakeup"');
+    });
+
+    it('should use NONE authorization type', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('authorization_type = "NONE"');
+    });
+
+    it('should allow POST and GET methods', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('allow_methods = ["POST", "GET"]');
+    });
+
+    it('should create public access permission for Function URL', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain(
+        'resource "aws_lambda_permission" "wakeup_url_public"',
+      );
+      expect(result).toContain(
+        'action                 = "lambda:InvokeFunctionUrl"',
+      );
+      expect(result).toContain('principal              = "*"');
+      expect(result).toContain('function_url_auth_type = "NONE"');
+    });
+  });
+
+  describe('IAM role', () => {
+    it('should create IAM role for Lambda', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('resource "aws_iam_role" "wakeup_lambda"');
+    });
+
+    it('should allow Lambda to assume role', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('Service = "lambda.amazonaws.com"');
+    });
+
+    it('should allow ECS DescribeServices and UpdateService', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('"ecs:DescribeServices"');
+      expect(result).toContain('"ecs:UpdateService"');
+    });
+
+    it('should attach Lambda basic execution role', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain(
+        'resource "aws_iam_role_policy_attachment" "wakeup_lambda_logs"',
+      );
+      expect(result).toContain('AWSLambdaBasicExecutionRole');
+    });
+  });
+
+  describe('CloudWatch log group', () => {
+    it('should create log group with 14 day retention', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain(
+        'resource "aws_cloudwatch_log_group" "wakeup_lambda"',
+      );
+      expect(result).toContain('retention_in_days = 14');
+    });
+  });
+
+  describe('header comment', () => {
+    it('should include generation comment', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toContain('Generated by: npx tsdevstack infra:generate');
+    });
+  });
+
+  describe('snapshot', () => {
+    it('should match snapshot', () => {
+      const result = generateWakeupLambdaTf();
+      expect(result).toMatchSnapshot();
+    });
+  });
+});

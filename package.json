@@ -1,0 +1,79 @@
+{
+  "name": "@tsdevstack/infra-core",
+  "version": "0.0.1",
+  "description": "Shared infrastructure utilities for tsdevstack framework",
+  "author": "tsdevstack",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tsdevstack/infra-core.git"
+  },
+  "homepage": "https://github.com/tsdevstack/infra-core",
+  "bugs": {
+    "url": "https://github.com/tsdevstack/infra-core/issues"
+  },
+  "keywords": [
+    "tsdevstack",
+    "infrastructure",
+    "gcp",
+    "aws",
+    "azure",
+    "devops"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "echo 'infra-core does not need watch mode - already built by build:libs'",
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "tsc": "tsc --noEmit",
+    "test": "rstest",
+    "test:watch": "rstest --watch"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apprunner": "^3.984.0",
+    "@aws-sdk/client-cloudfront": "^3.984.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.984.0",
+    "@aws-sdk/client-ecr": "^3.984.0",
+    "@aws-sdk/client-ecs": "^3.984.0",
+    "@aws-sdk/client-s3": "^3.984.0",
+    "@azure/arm-appcontainers": "^3.0.0",
+    "@azure/arm-storage": "^19.1.0",
+    "@azure/identity": "^4.13.0",
+    "@azure/storage-blob": "^12.31.0",
+    "@google-cloud/logging": "^11.0.0",
+    "@google-cloud/run": "^3.0.1",
+    "@google-cloud/storage": "^7.18.0",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^169.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@rslib/core": "^0.19.6",
+    "@rstest/adapter-rslib": "^0.2.0",
+    "@rstest/core": "^0.8.5",
+    "@types/node": "^24.10.13",
+    "eslint": "^9.39.2",
+    "globals": "^17.3.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.55.0"
+  },
+  "private": false,
+  "publishConfig": {
+    "access": "restricted"
+  }
+}
