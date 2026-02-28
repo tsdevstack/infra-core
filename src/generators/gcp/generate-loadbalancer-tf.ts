@@ -129,32 +129,6 @@ resource "google_compute_backend_service" "${toTerraformId(service.name)}" {
     )
     .join('\n');
 
-  // Generate IAM bindings for Cloud Run services behind the LB
-  // Services with ingress=internal-load-balancing need allUsers invoker permission
-  const cloudRunIamBindings = cloudRunServices
-    .map(
-      (service) => `
-# IAM binding to allow Load Balancer to invoke ${service.name}
-resource "google_cloud_run_service_iam_member" "${toTerraformId(service.name)}_invoker" {
-  location = var.gcp_region
-  service  = "${service.name}"
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}`,
-    )
-    .join('\n');
-
-  // Reference existing SPA buckets (created in base infrastructure spa-buckets.tf)
-  const spaBucketData = spaServices
-    .map(
-      (service) => `
-# Reference existing SPA bucket for ${service.name} (created in spa-buckets.tf)
-data "google_storage_bucket" "${toTerraformId(service.name)}_spa" {
-  name = "\${var.project_name}-${service.name}-spa-\${var.gcp_project_id}"
-}`,
-    )
-    .join('\n');
-
   // Generate SPA edge security policy (only if there are SPA services)
   const spaEdgePolicy =
     spaServices.length > 0 ? generateSpaEdgeSecurityPolicy() : '';
@@ -171,7 +145,7 @@ data "google_storage_bucket" "${toTerraformId(service.name)}_spa" {
 # Uses edge_security_policy for auth redirect and DDoS protection
 resource "google_compute_backend_bucket" "${toTerraformId(service.name)}_spa_backend" {
   name                 = "\${var.project_name}-${service.name}-spa-backend"
-  bucket_name          = data.google_storage_bucket.${toTerraformId(service.name)}_spa.name
+  bucket_name          = google_storage_bucket.${toTerraformId(service.name)}_spa.name
   enable_cdn           = true
   edge_security_policy = google_compute_security_policy.spa_edge.id
 
@@ -588,23 +562,9 @@ ${cloudRunNegs}
 ${cloudRunBackends}
 
 # =============================================================================
-# IAM Bindings (Allow Load Balancer to invoke Cloud Run services)
-# =============================================================================
-
-# IAM binding to allow Load Balancer to invoke Kong
-resource "google_cloud_run_service_iam_member" "kong_invoker" {
-  location = var.gcp_region
-  service  = "\${var.project_name}-kong"
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
-${cloudRunIamBindings}
-
-# =============================================================================
 # SPA Backends (Cloud Storage + CDN)
 # =============================================================================
 ${spaEdgePolicy}
-${spaBucketData}
 ${spaBackendBuckets}
 
 # =============================================================================

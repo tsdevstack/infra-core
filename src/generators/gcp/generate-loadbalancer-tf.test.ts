@@ -238,16 +238,9 @@ describe('generateLoadBalancerTf', () => {
         ],
       });
 
-      // Should reference existing bucket (created in spa-buckets.tf)
-      expect(result).toContain('data "google_storage_bucket" "react_app_spa"');
-
-      // Should NOT create the bucket here (bucket is created in base infra)
-      expect(result).not.toContain(
-        'resource "google_storage_bucket" "react_app_spa"',
-      );
-      expect(result).not.toContain(
-        'resource "google_storage_bucket_iam_member"',
-      );
+      // Should reference bucket resource from spa-buckets.tf (not data source)
+      expect(result).not.toContain('data "google_storage_bucket"');
+      expect(result).toContain('google_storage_bucket.react_app_spa.name');
     });
 
     it('should generate backend bucket with CDN for SPA services', () => {
@@ -300,8 +293,8 @@ describe('generateLoadBalancerTf', () => {
         'resource "google_compute_backend_service" "frontend"',
       );
 
-      // SPA frontend (references existing bucket, not creating)
-      expect(result).toContain('data "google_storage_bucket" "react_app_spa"');
+      // SPA frontend (references bucket resource from spa-buckets.tf)
+      expect(result).not.toContain('data "google_storage_bucket"');
       expect(result).toContain(
         'resource "google_compute_backend_bucket" "react_app_spa_backend"',
       );
@@ -314,52 +307,6 @@ describe('generateLoadBalancerTf', () => {
       );
       expect(result).toContain(
         'resource "google_certificate_manager_dns_authorization" "react_app"',
-      );
-    });
-  });
-
-  describe('IAM bindings for Load Balancer access', () => {
-    it('should create IAM binding for Kong', () => {
-      const result = generateLoadBalancerTf({
-        apiDomain: 'api.example.com',
-        frontendServices: [],
-      });
-
-      expect(result).toContain(
-        'resource "google_cloud_run_service_iam_member" "kong_invoker"',
-      );
-      expect(result).toContain('role     = "roles/run.invoker"');
-      expect(result).toContain('member   = "allUsers"');
-    });
-
-    it('should create IAM bindings for Cloud Run frontends', () => {
-      const result = generateLoadBalancerTf({
-        apiDomain: 'api.example.com',
-        frontendServices: [
-          { name: 'frontend', domain: 'example.com' },
-          { name: 'admin-app', domain: 'admin.example.com' },
-        ],
-      });
-
-      expect(result).toContain(
-        'resource "google_cloud_run_service_iam_member" "frontend_invoker"',
-      );
-      expect(result).toContain(
-        'resource "google_cloud_run_service_iam_member" "admin_app_invoker"',
-      );
-    });
-
-    it('should NOT create IAM bindings for SPA services', () => {
-      const result = generateLoadBalancerTf({
-        apiDomain: 'api.example.com',
-        frontendServices: [
-          { name: 'react-app', domain: 'app.example.com', type: 'spa' },
-        ],
-      });
-
-      // SPA services don't need IAM bindings (they're Cloud Storage, not Cloud Run)
-      expect(result).not.toContain(
-        'resource "google_cloud_run_service_iam_member" "react_app_invoker"',
       );
     });
   });
