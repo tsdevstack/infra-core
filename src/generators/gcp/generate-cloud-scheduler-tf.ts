@@ -3,6 +3,9 @@
  *
  * Creates scheduled HTTP jobs that call service endpoints with OIDC authentication.
  * Combined with @ApiExcludeController() and SchedulerGuard, provides secure scheduled tasks.
+ *
+ * Uses computed Cloud Run URLs (deterministic pattern) instead of data sources,
+ * so this file can be generated without services existing yet.
  */
 
 import type { ScheduledJobConfig } from '../../types/index.ts';
@@ -12,9 +15,13 @@ import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
  * Generate cloud-scheduler.tf content
  *
  * Creates:
+ * - Locals block with computed Cloud Run service URIs
  * - Service account for Cloud Scheduler
- * - IAM binding for run.invoker role per target service
  * - Cloud Scheduler job per scheduled task with OIDC authentication
+ *
+ * IAM bindings (run.invoker) are NOT included here — they require Cloud Run
+ * services to exist. Instead, deploy-schedulers sets them imperatively via
+ * @google-cloud/run SDK (same pattern as setServiceInvokerPolicy for Kong/services).
  */
 export function generateCloudSchedulerTf(jobs: ScheduledJobConfig[]): string {
   if (jobs.length === 0) {
@@ -26,34 +33,22 @@ export function generateCloudSchedulerTf(jobs: ScheduledJobConfig[]): string {
   // Get unique target services
   const targetServices = Array.from(new Set(jobs.map((j) => j.targetService)));
 
-  // Generate data sources to reference existing Cloud Run services
-  // Services are deployed via gcloud, not Terraform, so we use data sources
-  const dataSources = targetServices
+  // Generate locals block with computed Cloud Run service URIs
+  // Cloud Run v2 URLs follow: https://{service}-{project-number}.{region}.run.app
+  // Uses data.google_project.current.number (declared in iam.tf)
+  const serviceUriEntries = targetServices
     .map((service) => {
       const tfId = toTerraformId(service);
-      return `
-# Data source for existing ${service} Cloud Run service
-data "google_cloud_run_v2_service" "${tfId}" {
-  name     = "${service}"
-  location = var.gcp_region
-}`;
+      return `    ${tfId} = "https://${service}-\${data.google_project.current.number}.\${var.gcp_region}.run.app"`;
     })
     .join('\n');
 
-  // Generate IAM bindings for each target service
-  const iamBindings = targetServices
-    .map((service) => {
-      const tfId = toTerraformId(service);
-      return `
-# Allow scheduler to invoke ${service}
-resource "google_cloud_run_v2_service_iam_member" "scheduler_${tfId}" {
-  name     = data.google_cloud_run_v2_service.${tfId}.name
-  location = var.gcp_region
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:\${google_service_account.scheduler.email}"
+  const localsBlock = `
+locals {
+  scheduler_service_uris = {
+${serviceUriEntries}
+  }
 }`;
-    })
-    .join('\n');
 
   // Generate scheduler jobs
   const schedulerJobs = jobs
@@ -72,12 +67,12 @@ resource "google_cloud_scheduler_job" "${tfId}" {
   time_zone = "${timezone}"
 
   http_target {
-    uri         = "\${data.google_cloud_run_v2_service.${serviceTfId}.uri}${job.endpoint}"
+    uri         = "\${local.scheduler_service_uris.${serviceTfId}}${job.endpoint}"
     http_method = "${method}"
 
     oidc_token {
       service_account_email = google_service_account.scheduler.email
-      audience              = data.google_cloud_run_v2_service.${serviceTfId}.uri
+      audience              = local.scheduler_service_uris.${serviceTfId}
     }
   }
 
@@ -89,8 +84,6 @@ resource "google_cloud_scheduler_job" "${tfId}" {
   }
 
   attempt_deadline = "${timeout}s"
-
-  depends_on = [google_cloud_run_v2_service_iam_member.scheduler_${serviceTfId}]
 }`;
     })
     .join('\n');
@@ -100,11 +93,14 @@ resource "google_cloud_scheduler_job" "${tfId}" {
 #
 # Scheduled jobs call service endpoints with OIDC authentication.
 # Services validate tokens using SchedulerGuard from @tsdevstack/nest-common.
+#
+# Cloud Run URLs are computed from project number (no dependency on existing services).
+# IAM bindings (run.invoker) are set by deploy-schedulers via SDK, not Terraform.
 
 # ─────────────────────────────────────────
-# Data Sources (reference existing Cloud Run services)
+# Computed Service URIs
 # ─────────────────────────────────────────
-${dataSources}
+${localsBlock}
 
 # ─────────────────────────────────────────
 # Service Account
@@ -116,11 +112,6 @@ resource "google_service_account" "scheduler" {
   display_name = "Cloud Scheduler Service Account"
   description  = "Service account for Cloud Scheduler to invoke Cloud Run services"
 }
-
-# ─────────────────────────────────────────
-# IAM Bindings
-# ─────────────────────────────────────────
-${iamBindings}
 
 # ─────────────────────────────────────────
 # Scheduled Jobs

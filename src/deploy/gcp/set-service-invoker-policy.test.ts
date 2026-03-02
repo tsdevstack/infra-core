@@ -1,10 +1,25 @@
 import { describe, it, expect, rs, beforeEach } from '@rstest/core';
-import { execSync } from 'node:child_process';
-import { setServiceInvokerPolicy } from './set-service-invoker-policy';
 
-rs.mock('node:child_process', () => ({
-  execSync: rs.fn(),
+const mockGetIamPolicy = rs.fn();
+const mockSetIamPolicy = rs.fn();
+const mockServicePath = rs.fn(
+  (project: string, location: string, service: string) =>
+    `projects/${project}/locations/${location}/services/${service}`,
+);
+
+rs.mock('@google-cloud/run', () => ({
+  ServicesClient: rs.fn().mockImplementation(() => ({
+    getIamPolicy: mockGetIamPolicy,
+    setIamPolicy: mockSetIamPolicy,
+    servicePath: mockServicePath,
+  })),
 }));
+
+rs.mock('../../utils/gcp/build-gcp-client-options', () => ({
+  buildGCPClientOptions: rs.fn(() => ({ projectId: 'my-project' })),
+}));
+
+import { setServiceInvokerPolicy } from './set-service-invoker-policy';
 
 const mockRuntime = {
   logger: {
@@ -29,160 +44,71 @@ const mockRuntime = {
   isCIEnv: rs.fn(),
 };
 
+const baseOptions = {
+  projectId: 'my-project',
+  region: 'us-central1',
+  serviceName: 'my-service',
+  credentials: {
+    project_id: 'my-project',
+    client_email: 'sa@my-project.iam.gserviceaccount.com',
+    region: 'us-central1',
+  },
+};
+
 describe('setServiceInvokerPolicy', () => {
-  const mockExecSync = rs.mocked(execSync);
-
   beforeEach(() => {
-    rs.resetAllMocks();
+    rs.clearAllMocks();
+    mockGetIamPolicy.mockResolvedValue([{ bindings: [] }]);
+    mockSetIamPolicy.mockResolvedValue([{}]);
   });
 
-  describe('ADC mode (no private_key)', () => {
-    it('should execute gcloud command without credentials file', async () => {
-      const options = {
-        projectId: 'my-project',
-        region: 'us-central1',
-        serviceName: 'my-service',
-        credentials: {
-          project_id: 'my-project',
-          client_email: 'sa@my-project.iam.gserviceaccount.com',
-          region: 'us-central1',
-          // No private_key - ADC mode
-        },
-      };
+  it('should get current IAM policy', async () => {
+    await setServiceInvokerPolicy(mockRuntime, baseOptions);
 
-      await setServiceInvokerPolicy(mockRuntime, options);
-
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'gcloud run services add-iam-policy-binding my-service',
-        ),
-        expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] }),
-      );
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('--region=us-central1'),
-        expect.anything(),
-      );
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('--project=my-project'),
-        expect.anything(),
-      );
-    });
-
-    it('should log success on successful execution', async () => {
-      const options = {
-        projectId: 'my-project',
-        region: 'us-central1',
-        serviceName: 'my-service',
-        credentials: {
-          project_id: 'my-project',
-          client_email: 'sa@test.iam',
-          region: 'us-central1',
-        },
-      };
-
-      await setServiceInvokerPolicy(mockRuntime, options);
-
-      expect(mockRuntime.logger.success).toHaveBeenCalledWith(
-        expect.stringContaining('IAM: allUsers can invoke'),
-      );
-    });
-
-    it('should warn on failure (non-fatal)', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
-      });
-
-      const options = {
-        projectId: 'my-project',
-        region: 'us-central1',
-        serviceName: 'my-service',
-        credentials: {
-          project_id: 'my-project',
-          client_email: 'sa@test.iam',
-          region: 'us-central1',
-        },
-      };
-
-      await setServiceInvokerPolicy(mockRuntime, options);
-
-      expect(mockRuntime.logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Could not set IAM invoker policy'),
-      );
+    expect(mockGetIamPolicy).toHaveBeenCalledWith({
+      resource: 'projects/my-project/locations/us-central1/services/my-service',
     });
   });
 
-  describe('Explicit credentials mode (with private_key)', () => {
-    it('should create temp credentials file when private_key is provided', async () => {
-      const options = {
-        projectId: 'my-project',
-        region: 'us-central1',
-        serviceName: 'my-service',
-        credentials: {
-          project_id: 'my-project',
-          client_email: 'sa@my-project.iam.gserviceaccount.com',
-          private_key:
-            '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
-          region: 'us-central1',
-        },
-      };
+  it('should add allUsers run.invoker binding', async () => {
+    await setServiceInvokerPolicy(mockRuntime, baseOptions);
 
-      await setServiceInvokerPolicy(mockRuntime, options);
-
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('gcloud run services add-iam-policy-binding'),
-        expect.objectContaining({
-          env: expect.objectContaining({
-            GOOGLE_APPLICATION_CREDENTIALS:
-              expect.stringContaining('credentials.json'),
-          }),
-        }),
-      );
+    expect(mockSetIamPolicy).toHaveBeenCalledWith({
+      resource: 'projects/my-project/locations/us-central1/services/my-service',
+      policy: expect.objectContaining({
+        bindings: [{ role: 'roles/run.invoker', members: ['allUsers'] }],
+      }),
     });
+  });
 
-    it('should log success with explicit credentials', async () => {
-      const options = {
-        projectId: 'my-project',
-        region: 'us-central1',
-        serviceName: 'my-service',
-        credentials: {
-          project_id: 'my-project',
-          client_email: 'sa@test.iam',
-          private_key:
-            '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
-          region: 'us-central1',
-        },
-      };
+  it('should log success', async () => {
+    await setServiceInvokerPolicy(mockRuntime, baseOptions);
 
-      await setServiceInvokerPolicy(mockRuntime, options);
+    expect(mockRuntime.logger.success).toHaveBeenCalledWith(
+      expect.stringContaining('IAM: allUsers can invoke'),
+    );
+  });
 
-      expect(mockRuntime.logger.success).toHaveBeenCalledWith(
-        expect.stringContaining('IAM: allUsers can invoke'),
-      );
-    });
+  it('should skip if binding already exists', async () => {
+    mockGetIamPolicy.mockResolvedValue([
+      {
+        bindings: [{ role: 'roles/run.invoker', members: ['allUsers'] }],
+      },
+    ]);
 
-    it('should warn on failure with explicit credentials', async () => {
-      mockExecSync.mockImplementation(() => {
-        throw new Error('Command failed');
-      });
+    await setServiceInvokerPolicy(mockRuntime, baseOptions);
 
-      const options = {
-        projectId: 'my-project',
-        region: 'us-central1',
-        serviceName: 'my-service',
-        credentials: {
-          project_id: 'my-project',
-          client_email: 'sa@test.iam',
-          private_key:
-            '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----',
-          region: 'us-central1',
-        },
-      };
+    expect(mockSetIamPolicy).not.toHaveBeenCalled();
+    expect(mockRuntime.logger.success).toHaveBeenCalled();
+  });
 
-      await setServiceInvokerPolicy(mockRuntime, options);
+  it('should warn on failure', async () => {
+    mockGetIamPolicy.mockRejectedValue(new Error('API error'));
 
-      expect(mockRuntime.logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Could not set IAM invoker policy'),
-      );
-    });
+    await setServiceInvokerPolicy(mockRuntime, baseOptions);
+
+    expect(mockRuntime.logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not set IAM invoker policy'),
+    );
   });
 });

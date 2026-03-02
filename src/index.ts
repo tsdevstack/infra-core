@@ -195,6 +195,8 @@ export type {
 } from './deploy/gcp/cloud-run-jobs.ts';
 export { setServiceInvokerPolicy } from './deploy/gcp/set-service-invoker-policy.ts';
 export type { SetServiceInvokerPolicyOptions } from './deploy/gcp/set-service-invoker-policy.ts';
+export { setSchedulerInvokerBindings } from './deploy/gcp/set-scheduler-invoker-bindings.ts';
+export type { SetSchedulerInvokerBindingsOptions } from './deploy/gcp/set-scheduler-invoker-bindings.ts';
 export { fetchJobLogs } from './deploy/gcp/fetch-cloud-run-logs.ts';
 export { formatLogEntries } from './deploy/gcp/format-log-entries.ts';
 export type { LogEntry } from './deploy/gcp/format-log-entries.ts';

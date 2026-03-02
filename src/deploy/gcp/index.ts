@@ -30,6 +30,8 @@ export type {
 // Cloud Run support utilities (Session 3)
 export { setServiceInvokerPolicy } from './set-service-invoker-policy.ts';
 export type { SetServiceInvokerPolicyOptions } from './set-service-invoker-policy.ts';
+export { setSchedulerInvokerBindings } from './set-scheduler-invoker-bindings.ts';
+export type { SetSchedulerInvokerBindingsOptions } from './set-scheduler-invoker-bindings.ts';
 export { fetchJobLogs } from './fetch-cloud-run-logs.ts';
 export { formatLogEntries } from './format-log-entries.ts';
 export type { LogEntry } from './format-log-entries.ts';

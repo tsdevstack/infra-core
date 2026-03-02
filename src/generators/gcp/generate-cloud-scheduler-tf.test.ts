@@ -38,34 +38,6 @@ describe('generateCloudSchedulerTf', () => {
     });
   });
 
-  describe('IAM bindings', () => {
-    const jobs: ScheduledJobConfig[] = [
-      {
-        name: 'cleanup-tokens',
-        schedule: '0 */4 * * *',
-        targetService: 'auth-service',
-        endpoint: '/jobs/cleanup-tokens',
-      },
-    ];
-
-    it('should create IAM binding for run.invoker role', () => {
-      const result = generateCloudSchedulerTf(jobs);
-      expect(result).toContain(
-        'resource "google_cloud_run_v2_service_iam_member" "scheduler_auth_service"',
-      );
-    });
-
-    it('should grant run.invoker role', () => {
-      const result = generateCloudSchedulerTf(jobs);
-      expect(result).toContain('role     = "roles/run.invoker"');
-    });
-
-    it('should use scheduler service account', () => {
-      const result = generateCloudSchedulerTf(jobs);
-      expect(result).toContain('google_service_account.scheduler.email');
-    });
-  });
-
   describe('single job', () => {
     const jobs: ScheduledJobConfig[] = [
       {
@@ -98,11 +70,9 @@ describe('generateCloudSchedulerTf', () => {
       expect(result).toContain('time_zone = "UTC"');
     });
 
-    it('should configure HTTP target with service URI', () => {
+    it('should configure HTTP target with computed service URI', () => {
       const result = generateCloudSchedulerTf(jobs);
-      expect(result).toContain(
-        'data.google_cloud_run_v2_service.auth_service.uri',
-      );
+      expect(result).toContain('local.scheduler_service_uris.auth_service');
       expect(result).toContain('/jobs/cleanup-tokens');
     });
 
@@ -180,15 +150,6 @@ describe('generateCloudSchedulerTf', () => {
         'resource "google_cloud_scheduler_job" "cleanup_sessions"',
       );
     });
-
-    it('should only create one IAM binding per service', () => {
-      const result = generateCloudSchedulerTf(jobs);
-      // Should only have one IAM binding resource for auth-service (not counting depends_on references)
-      const matches = result.match(
-        /resource "google_cloud_run_v2_service_iam_member" "scheduler_auth_service"/g,
-      );
-      expect(matches?.length).toBe(1);
-    });
   });
 
   describe('multiple jobs different services', () => {
@@ -207,10 +168,12 @@ describe('generateCloudSchedulerTf', () => {
       },
     ];
 
-    it('should create IAM binding for each target service', () => {
+    it('should compute URI for each target service', () => {
       const result = generateCloudSchedulerTf(jobs);
-      expect(result).toContain('scheduler_auth_service');
-      expect(result).toContain('scheduler_notification_service');
+      expect(result).toContain('auth_service = "https://auth-service-');
+      expect(result).toContain(
+        'notification_service = "https://notification-service-',
+      );
     });
   });
 
