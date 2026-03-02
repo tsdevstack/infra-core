@@ -2,7 +2,7 @@
  * Set IAM policy to allow allUsers to invoke a Cloud Run service
  *
  * Used for internal-only services where ingress restricts access to VPC.
- * Uses @google-cloud/run SDK (not gcloud CLI).
+ * Uses @google-cloud/run SDK.
  */
 
 import { ServicesClient } from '@google-cloud/run';

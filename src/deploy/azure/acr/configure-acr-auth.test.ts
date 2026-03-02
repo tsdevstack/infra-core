@@ -10,8 +10,8 @@ rs.mock('@azure/identity', () => ({
   }),
 }));
 
-rs.mock('node:child_process', () => ({
-  spawnSync: rs.fn(),
+rs.mock('../../shared/docker-login-via-stdin.ts', () => ({
+  dockerLoginViaStdin: rs.fn(),
 }));
 
 rs.mock('../../shared/docker-login-with-retry.ts', () => ({
@@ -19,7 +19,7 @@ rs.mock('../../shared/docker-login-with-retry.ts', () => ({
 }));
 
 import { configureAcrAuth } from './configure-acr-auth.ts';
-import { spawnSync } from 'node:child_process';
+import { dockerLoginViaStdin } from '../../shared/docker-login-via-stdin.ts';
 
 const mockRuntime: InfraCoreRuntime = {
   logger: {
@@ -74,12 +74,6 @@ describe('configureAcrAuth', () => {
         }),
       );
 
-      rs.mocked(spawnSync).mockReturnValue({
-        status: 0,
-        stdout: 'Login Succeeded',
-        stderr: '',
-      } as ReturnType<typeof spawnSync>);
-
       await configureAcrAuth(
         mockRuntime,
         mockCredentials,
@@ -101,19 +95,10 @@ describe('configureAcrAuth', () => {
       );
 
       // Should docker login with refresh token
-      expect(spawnSync).toHaveBeenCalledWith(
-        'docker',
-        [
-          'login',
-          'myprojectdevacr.azurecr.io',
-          '--username',
-          '00000000-0000-0000-0000-000000000000',
-          '--password-stdin',
-        ],
-        expect.objectContaining({
-          input: 'acr-refresh-token-123',
-          encoding: 'utf-8',
-        }),
+      expect(dockerLoginViaStdin).toHaveBeenCalledWith(
+        'myprojectdevacr.azurecr.io',
+        '00000000-0000-0000-0000-000000000000',
+        'acr-refresh-token-123',
       );
     });
 
@@ -150,11 +135,9 @@ describe('configureAcrAuth', () => {
         }),
       );
 
-      rs.mocked(spawnSync).mockReturnValue({
-        status: 1,
-        stdout: '',
-        stderr: 'connection refused',
-      } as ReturnType<typeof spawnSync>);
+      rs.mocked(dockerLoginViaStdin).mockImplementationOnce(() => {
+        throw new Error('connection refused');
+      });
 
       await expect(
         configureAcrAuth(mockRuntime, mockCredentials, 'myacr.azurecr.io'),
@@ -164,36 +147,19 @@ describe('configureAcrAuth', () => {
 
   describe('local mode', () => {
     it('should use docker login with service principal', async () => {
-      rs.mocked(spawnSync).mockReturnValue({
-        status: 0,
-        stdout: 'Login Succeeded',
-        stderr: '',
-      } as ReturnType<typeof spawnSync>);
-
       await configureAcrAuth(mockRuntime, mockCredentials, 'myacr.azurecr.io');
 
-      expect(spawnSync).toHaveBeenCalledWith(
-        'docker',
-        [
-          'login',
-          'myacr.azurecr.io',
-          '--username',
-          'client-789',
-          '--password-stdin',
-        ],
-        expect.objectContaining({
-          input: 'secret-abc',
-          encoding: 'utf-8',
-        }),
+      expect(dockerLoginViaStdin).toHaveBeenCalledWith(
+        'myacr.azurecr.io',
+        'client-789',
+        'secret-abc',
       );
     });
 
     it('should throw InfraCoreError when docker login fails', async () => {
-      rs.mocked(spawnSync).mockReturnValue({
-        status: 1,
-        stdout: '',
-        stderr: 'unauthorized',
-      } as ReturnType<typeof spawnSync>);
+      rs.mocked(dockerLoginViaStdin).mockImplementationOnce(() => {
+        throw new Error('unauthorized');
+      });
 
       await expect(
         configureAcrAuth(mockRuntime, mockCredentials, 'myacr.azurecr.io'),

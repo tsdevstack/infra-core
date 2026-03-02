@@ -6,12 +6,12 @@
  * - CI (OIDC): DefaultAzureCredential + ACR token exchange
  */
 
-import { spawnSync } from 'node:child_process';
 import type { AzureCredentials } from '../../../types/credentials.ts';
 import type { InfraCoreRuntime } from '../../../types/runtime.ts';
 import { InfraCoreError } from '../../../runtime/infra-core-error.ts';
 import { getAcrRefreshToken } from './get-acr-refresh-token.ts';
 import { dockerLoginWithRetry } from '../../shared/docker-login-with-retry.ts';
+import { dockerLoginViaStdin } from '../../shared/docker-login-via-stdin.ts';
 
 /**
  * Configure Docker to authenticate with ACR
@@ -28,27 +28,13 @@ export async function configureAcrAuth(
       const refreshToken = await getAcrRefreshToken(loginServer);
 
       // Docker login with ACR refresh token (with retry for API propagation delays)
-      await dockerLoginWithRetry(() => {
-        const result = spawnSync(
-          'docker',
-          [
-            'login',
-            loginServer,
-            '--username',
-            '00000000-0000-0000-0000-000000000000',
-            '--password-stdin',
-          ],
-          {
-            input: refreshToken,
-            encoding: 'utf-8',
-          },
-        );
-
-        if (result.status !== 0) {
-          const errorMsg = result.stderr || result.stdout || 'Unknown error';
-          throw new Error(`Docker login failed: ${errorMsg}`);
-        }
-      });
+      await dockerLoginWithRetry(() =>
+        dockerLoginViaStdin(
+          loginServer,
+          '00000000-0000-0000-0000-000000000000',
+          refreshToken,
+        ),
+      );
 
       return;
     } catch (error) {
@@ -73,27 +59,13 @@ export async function configureAcrAuth(
 
   // Docker login with service principal (with retry for API propagation delays)
   try {
-    await dockerLoginWithRetry(() => {
-      const result = spawnSync(
-        'docker',
-        [
-          'login',
-          loginServer,
-          '--username',
-          credentials.clientId,
-          '--password-stdin',
-        ],
-        {
-          input: credentials.clientSecret,
-          encoding: 'utf-8',
-        },
-      );
-
-      if (result.status !== 0) {
-        const errorMsg = result.stderr || result.stdout || 'Unknown error';
-        throw new Error(`Docker login failed: ${errorMsg}`);
-      }
-    });
+    await dockerLoginWithRetry(() =>
+      dockerLoginViaStdin(
+        loginServer,
+        credentials.clientId,
+        credentials.clientSecret!,
+      ),
+    );
   } catch (error) {
     if (error instanceof InfraCoreError) throw error;
     const msg = error instanceof Error ? error.message : 'Unknown error';

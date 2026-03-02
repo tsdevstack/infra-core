@@ -2,7 +2,7 @@
  * Set IAM bindings for Cloud Scheduler to invoke Cloud Run services
  *
  * Grants the scheduler service account roles/run.invoker on each target service.
- * Uses @google-cloud/run SDK (not gcloud CLI).
+ * Uses @google-cloud/run SDK.
  *
  * This is done outside Terraform so cloud-scheduler.tf has no dependency
  * on existing Cloud Run services and can always be generated.

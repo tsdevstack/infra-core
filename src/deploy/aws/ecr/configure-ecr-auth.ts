@@ -6,31 +6,12 @@
  * - CI (OIDC/environment): Use AWS SDK with default credential provider chain
  */
 
-import { spawnSync } from 'node:child_process';
 import { ECRClient, GetAuthorizationTokenCommand } from '@aws-sdk/client-ecr';
 import type { AWSCredentials } from '../../../types/credentials.ts';
 import type { InfraCoreRuntime } from '../../../types/runtime.ts';
 import { InfraCoreError } from '../../../runtime/infra-core-error.ts';
 import { dockerLoginWithRetry } from '../../shared/docker-login-with-retry.ts';
-
-/**
- * Login to Docker registry using stdin for password (avoids shell escaping issues)
- */
-function dockerLogin(registryHost: string, password: string): void {
-  const result = spawnSync(
-    'docker',
-    ['login', '--username', 'AWS', '--password-stdin', registryHost],
-    {
-      input: password,
-      encoding: 'utf-8',
-    },
-  );
-
-  if (result.status !== 0) {
-    const errorMsg = result.stderr || result.stdout || 'Unknown error';
-    throw new Error(`Docker login failed: ${errorMsg}`);
-  }
-}
+import { dockerLoginViaStdin } from '../../shared/docker-login-via-stdin.ts';
 
 /**
  * Configure Docker to authenticate with ECR
@@ -89,7 +70,9 @@ export async function configureEcrAuth(
 
   // Login to Docker using the token (with retry for API propagation delays)
   try {
-    await dockerLoginWithRetry(() => dockerLogin(registryHost, password));
+    await dockerLoginWithRetry(() =>
+      dockerLoginViaStdin(registryHost, 'AWS', password),
+    );
   } catch (error) {
     if (error instanceof InfraCoreError) throw error;
     const msg = error instanceof Error ? error.message : 'Unknown error';

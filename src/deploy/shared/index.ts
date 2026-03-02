@@ -18,6 +18,7 @@ export { parseServiceFilter } from './parse-service-filter.ts';
 
 // Docker
 export { dockerLoginWithRetry } from './docker-login-with-retry.ts';
+export { dockerLoginViaStdin } from './docker-login-via-stdin.ts';
 
 // Types
 export type { SecretConfig, BuildSecretNameFn } from './types.ts';
