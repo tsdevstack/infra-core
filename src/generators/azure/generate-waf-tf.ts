@@ -50,6 +50,7 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "main" {
   enabled                           = true
   tags                              = local.tags
 
-${customRulesHcl}${managedRulesHcl}}
+${customRulesHcl}${managedRulesHcl}
+}
 `;
 }

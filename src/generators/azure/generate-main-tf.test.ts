@@ -60,7 +60,9 @@ describe('generateMainTf', () => {
 
     expect(result).toContain('provider "azurerm"');
     expect(result).toContain('purge_soft_delete_on_destroy = false');
-    expect(result).toContain('subscription_id = var.subscription_id');
+    expect(result).toContain('subscription_id');
+    expect(result).toContain('var.subscription_id');
+    expect(result).toContain('resource_provider_registrations = "none"');
   });
 
   it('should include data source for current client config', () => {
