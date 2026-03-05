@@ -93,6 +93,24 @@ describe('generateOutputsTf', () => {
     );
   });
 
+  it('should output container_apps_acr_identity_id', () => {
+    const result = generateOutputsTf(baseConfig);
+
+    expect(result).toContain('output "container_apps_acr_identity_id"');
+    expect(result).toContain(
+      'azurerm_user_assigned_identity.container_apps.id',
+    );
+  });
+
+  it('should output container_apps_acr_identity_client_id', () => {
+    const result = generateOutputsTf(baseConfig);
+
+    expect(result).toContain('output "container_apps_acr_identity_client_id"');
+    expect(result).toContain(
+      'azurerm_user_assigned_identity.container_apps.client_id',
+    );
+  });
+
   describe('Redis outputs', () => {
     it('should output redis_host', () => {
       const result = generateOutputsTf(baseConfig);

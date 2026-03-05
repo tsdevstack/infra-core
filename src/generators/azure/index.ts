@@ -9,6 +9,7 @@ export { generateOutputsTf } from './generate-outputs-tf.ts';
 export { generateNetworkTf } from './generate-network-tf.ts';
 export { generateAcrTf } from './generate-acr-tf.ts';
 export { generateContainerAppsEnvTf } from './generate-container-apps-env-tf.ts';
+export { generateContainerAppsIdentityTf } from './generate-container-apps-identity-tf.ts';
 export { generateDatabaseTf } from './generate-database-tf.ts';
 export { generateRedisTf } from './generate-redis-tf.ts';
 export { generateFrontdoorTf } from './generate-frontdoor-tf.ts';

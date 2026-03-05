@@ -285,6 +285,64 @@ describe('createOrUpdateContainerApp', () => {
     });
   });
 
+  describe('Managed identity ACR auth', () => {
+    it('should use managed identity for registry when acrManagedIdentityId is provided', async () => {
+      mockBeginCreateOrUpdateAndWait.mockResolvedValue({
+        configuration: {},
+      });
+
+      await createOrUpdateContainerApp(mockRuntime, {
+        credentials: testCredentials,
+        resourceGroupName: 'test-rg',
+        containerAppName: 'test-app',
+        containerAppsEnvId:
+          '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env',
+        image: 'myacr.azurecr.io/myapp:latest',
+        acrLoginServer: 'myacr.azurecr.io',
+        acrManagedIdentityId:
+          '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ca-identity',
+      });
+
+      const callArgs = mockBeginCreateOrUpdateAndWait.mock.calls[0];
+      const containerAppEnvelope = callArgs[2];
+      expect(containerAppEnvelope.configuration.registries).toEqual([
+        {
+          server: 'myacr.azurecr.io',
+          identity:
+            '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ca-identity',
+        },
+      ]);
+      expect(containerAppEnvelope.identity).toEqual({
+        type: 'UserAssigned',
+        userAssignedIdentities: {
+          '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.ManagedIdentity/userAssignedIdentities/ca-identity':
+            {},
+        },
+      });
+    });
+
+    it('should not include acr-password secret when using managed identity', async () => {
+      mockBeginCreateOrUpdateAndWait.mockResolvedValue({
+        configuration: {},
+      });
+
+      await createOrUpdateContainerApp(mockRuntime, {
+        credentials: testCredentials,
+        resourceGroupName: 'test-rg',
+        containerAppName: 'test-app',
+        containerAppsEnvId:
+          '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env',
+        image: 'myacr.azurecr.io/myapp:latest',
+        acrLoginServer: 'myacr.azurecr.io',
+        acrManagedIdentityId: '/subscriptions/sub/identity',
+      });
+
+      const callArgs = mockBeginCreateOrUpdateAndWait.mock.calls[0];
+      const containerAppEnvelope = callArgs[2];
+      expect(containerAppEnvelope.configuration.secrets).toBeUndefined();
+    });
+  });
+
   describe('ACR registry auth', () => {
     it('should configure registry credentials when acrLoginServer is provided', async () => {
       mockBeginCreateOrUpdateAndWait.mockResolvedValue({

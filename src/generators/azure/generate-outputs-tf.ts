@@ -143,6 +143,16 @@ output "container_apps_env_default_domain" {
   value       = azurerm_container_app_environment.main.default_domain
 }
 
+output "container_apps_acr_identity_id" {
+  description = "User-assigned managed identity for Container Apps ACR pull"
+  value       = azurerm_user_assigned_identity.container_apps.id
+}
+
+output "container_apps_acr_identity_client_id" {
+  description = "Client ID of the Container Apps managed identity (used as AZURE_CLIENT_ID)"
+  value       = azurerm_user_assigned_identity.container_apps.client_id
+}
+
 # =============================================================================
 # Redis (Azure Managed Redis)
 # =============================================================================

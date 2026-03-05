@@ -182,6 +182,11 @@ export type {
   WaitForContainerAppReadyOptions,
   WaitForContainerAppReadyResult,
 } from './deploy/azure/container-apps/wait-for-container-app-ready.ts';
+export { waitForContainerAppActivation } from './deploy/azure/container-apps/wait-for-container-app-activation.ts';
+export type {
+  WaitForContainerAppActivationOptions,
+  WaitForContainerAppActivationResult,
+} from './deploy/azure/container-apps/wait-for-container-app-activation.ts';
 // GCP Cloud Run
 export { deployCloudRunService } from './deploy/gcp/cloud-run-services.ts';
 export type {

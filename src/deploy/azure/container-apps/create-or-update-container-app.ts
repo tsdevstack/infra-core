@@ -40,6 +40,8 @@ export interface CreateOrUpdateContainerAppOptions {
   externalIngress?: boolean;
   /** ACR login server for private registry auth (e.g., 'myacr.azurecr.io') */
   acrLoginServer?: string;
+  /** User-assigned managed identity resource ID for ACR pull (preferred over password auth) */
+  acrManagedIdentityId?: string;
 }
 
 export interface CreateOrUpdateContainerAppResult {
@@ -67,6 +69,7 @@ export async function createOrUpdateContainerApp(
     memory = '0.5Gi',
     externalIngress = false,
     acrLoginServer,
+    acrManagedIdentityId,
   } = options;
 
   const credential = createAzureCredential(runtime, credentials);
@@ -103,11 +106,27 @@ export async function createOrUpdateContainerApp(
   // Build secrets config for Container App
   const allSecrets = secrets.map((s) => ({ name: s.name, value: s.value }));
 
-  // Add ACR password secret if private registry auth is needed
-  // Local: SP client secret as password
-  // CI: exchange OIDC token for ACR refresh token
-  let acrUsername: string | undefined;
-  if (acrLoginServer) {
+  // ACR registry auth: prefer managed identity, fall back to password
+  let registries: Array<Record<string, string>> | undefined;
+  let identity:
+    | {
+        type: string;
+        userAssignedIdentities?: Record<string, Record<string, never>>;
+      }
+    | undefined;
+
+  if (acrLoginServer && acrManagedIdentityId) {
+    // Managed identity — no tokens to expire, works with scale-to-zero
+    registries = [{ server: acrLoginServer, identity: acrManagedIdentityId }];
+    identity = {
+      type: 'UserAssigned',
+      userAssignedIdentities: { [acrManagedIdentityId]: {} },
+    };
+  } else if (acrLoginServer) {
+    // Fallback: password-based auth (short-lived tokens)
+    // Local: SP client secret as password
+    // CI: exchange OIDC token for ACR refresh token
+    let acrUsername: string;
     if (credentials.clientSecret) {
       allSecrets.push({
         name: 'acr-password',
@@ -122,21 +141,16 @@ export async function createOrUpdateContainerApp(
       });
       acrUsername = '00000000-0000-0000-0000-000000000000';
     }
+    registries = [
+      {
+        server: acrLoginServer,
+        username: acrUsername,
+        passwordSecretRef: 'acr-password',
+      },
+    ];
   }
 
   const secretsConfig = allSecrets.length > 0 ? allSecrets : undefined;
-
-  // Build registry config for private ACR
-  const registries =
-    acrLoginServer && acrUsername
-      ? [
-          {
-            server: acrLoginServer,
-            username: acrUsername,
-            passwordSecretRef: 'acr-password',
-          },
-        ]
-      : undefined;
 
   try {
     const result = await client.containerApps.beginCreateOrUpdateAndWait(
@@ -145,6 +159,7 @@ export async function createOrUpdateContainerApp(
       {
         location: credentials.location,
         environmentId: containerAppsEnvId,
+        identity,
         configuration: {
           ingress,
           secrets: secretsConfig,

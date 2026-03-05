@@ -24,3 +24,8 @@ export type {
   WaitForContainerAppReadyOptions,
   WaitForContainerAppReadyResult,
 } from './container-apps/wait-for-container-app-ready.ts';
+export { waitForContainerAppActivation } from './container-apps/wait-for-container-app-activation.ts';
+export type {
+  WaitForContainerAppActivationOptions,
+  WaitForContainerAppActivationResult,
+} from './container-apps/wait-for-container-app-activation.ts';
