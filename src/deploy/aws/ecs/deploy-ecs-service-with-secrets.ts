@@ -1,7 +1,7 @@
 /**
  * Deploy ECS Service with Secrets Injection
  *
- * Similar to kong-deploy.ts, this function:
+ * Similar to deploy-kong.ts, this function:
  * 1. Fetches the existing task definition
  * 2. Builds a secrets array for the service
  * 3. Registers a new task definition with secrets

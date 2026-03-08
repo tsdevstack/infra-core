@@ -170,6 +170,14 @@ export type {
   WaitForAppRunnerRunningOptions,
   WaitForAppRunnerRunningResult,
 } from './deploy/aws/apprunner/wait-for-apprunner-running.ts';
+// Azure types
+export type { ContainerAppIdentity } from './deploy/azure/types/index.ts';
+// Azure ACR auth
+export { buildAcrAuthConfig } from './deploy/azure/acr/build-acr-auth-config.ts';
+export type {
+  AcrAuthConfig,
+  BuildAcrAuthConfigOptions,
+} from './deploy/azure/acr/build-acr-auth-config.ts';
 // Azure credential + Container Apps
 export { createAzureCredential } from './deploy/azure/create-azure-credential.ts';
 export { createOrUpdateContainerApp } from './deploy/azure/container-apps/create-or-update-container-app.ts';
@@ -187,6 +195,11 @@ export type {
   WaitForContainerAppActivationOptions,
   WaitForContainerAppActivationResult,
 } from './deploy/azure/container-apps/wait-for-container-app-activation.ts';
+export { deployWithActivationCheck } from './deploy/azure/container-apps/deploy-with-activation-check.ts';
+export type {
+  DeployWithActivationCheckOptions,
+  DeployWithActivationCheckResult,
+} from './deploy/azure/container-apps/deploy-with-activation-check.ts';
 // GCP Cloud Run
 export { deployCloudRunService } from './deploy/gcp/cloud-run-services.ts';
 export type {

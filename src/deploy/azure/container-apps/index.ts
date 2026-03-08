@@ -17,3 +17,8 @@ export type {
   WaitForContainerAppActivationOptions,
   WaitForContainerAppActivationResult,
 } from './wait-for-container-app-activation.ts';
+export { deployWithActivationCheck } from './deploy-with-activation-check.ts';
+export type {
+  DeployWithActivationCheckOptions,
+  DeployWithActivationCheckResult,
+} from './deploy-with-activation-check.ts';

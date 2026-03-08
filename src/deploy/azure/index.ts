@@ -2,8 +2,16 @@
  * Azure deployment utilities
  */
 
+// Types
+export type { ContainerAppIdentity } from './types/index.ts';
+
 export { configureAcrAuth } from './acr/configure-acr-auth.ts';
 export { getAcrRefreshToken } from './acr/get-acr-refresh-token.ts';
+export { buildAcrAuthConfig } from './acr/build-acr-auth-config.ts';
+export type {
+  AcrAuthConfig,
+  BuildAcrAuthConfigOptions,
+} from './acr/build-acr-auth-config.ts';
 export { uploadSpaToAzureStorage } from './upload-spa-to-azure-storage.ts';
 export type {
   UploadSpaToAzureStorageOptions,
@@ -29,3 +37,8 @@ export type {
   WaitForContainerAppActivationOptions,
   WaitForContainerAppActivationResult,
 } from './container-apps/wait-for-container-app-activation.ts';
+export { deployWithActivationCheck } from './container-apps/deploy-with-activation-check.ts';
+export type {
+  DeployWithActivationCheckOptions,
+  DeployWithActivationCheckResult,
+} from './container-apps/deploy-with-activation-check.ts';

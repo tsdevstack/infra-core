@@ -89,7 +89,6 @@ resource "aws_lambda_function_url" "wakeup" {
 # Permission to allow public access to Lambda Function URL
 # AWS requires BOTH lambda:InvokeFunctionUrl AND lambda:InvokeFunction for Function URLs
 resource "aws_lambda_permission" "wakeup_url_public" {
-  statement_id           = "FunctionURLAllowPublicAccess"
   action                 = "lambda:InvokeFunctionUrl"
   function_name          = aws_lambda_function.wakeup.function_name
   principal              = "*"
@@ -100,7 +99,6 @@ resource "aws_lambda_permission" "wakeup_url_public" {
 }
 
 resource "aws_lambda_permission" "wakeup_invoke_public" {
-  statement_id  = "FunctionURLAllowPublicInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.wakeup.function_name
   principal     = "*"

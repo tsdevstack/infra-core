@@ -6,7 +6,7 @@
 
 import { ContainerAppsAPIClient } from '@azure/arm-appcontainers';
 import { createAzureCredential } from '../create-azure-credential.ts';
-import { getAcrRefreshToken } from '../acr/get-acr-refresh-token.ts';
+import { buildAcrAuthConfig } from '../acr/build-acr-auth-config.ts';
 import type { Container } from '@azure/arm-appcontainers';
 import type { InfraCoreRuntime } from '../../../types/runtime.ts';
 import type { AzureCredentials } from '../../../types/credentials.ts';
@@ -107,48 +107,13 @@ export async function createOrUpdateContainerApp(
   const allSecrets = secrets.map((s) => ({ name: s.name, value: s.value }));
 
   // ACR registry auth: prefer managed identity, fall back to password
-  let registries: Array<Record<string, string>> | undefined;
-  let identity:
-    | {
-        type: string;
-        userAssignedIdentities?: Record<string, Record<string, never>>;
-      }
-    | undefined;
-
-  if (acrLoginServer && acrManagedIdentityId) {
-    // Managed identity — no tokens to expire, works with scale-to-zero
-    registries = [{ server: acrLoginServer, identity: acrManagedIdentityId }];
-    identity = {
-      type: 'UserAssigned',
-      userAssignedIdentities: { [acrManagedIdentityId]: {} },
-    };
-  } else if (acrLoginServer) {
-    // Fallback: password-based auth (short-lived tokens)
-    // Local: SP client secret as password
-    // CI: exchange OIDC token for ACR refresh token
-    let acrUsername: string;
-    if (credentials.clientSecret) {
-      allSecrets.push({
-        name: 'acr-password',
-        value: credentials.clientSecret,
-      });
-      acrUsername = credentials.clientId;
-    } else {
-      const refreshToken = await getAcrRefreshToken(acrLoginServer);
-      allSecrets.push({
-        name: 'acr-password',
-        value: refreshToken,
-      });
-      acrUsername = '00000000-0000-0000-0000-000000000000';
-    }
-    registries = [
-      {
-        server: acrLoginServer,
-        username: acrUsername,
-        passwordSecretRef: 'acr-password',
-      },
-    ];
-  }
+  const acrAuth = await buildAcrAuthConfig({
+    acrLoginServer,
+    acrManagedIdentityId,
+    credentials,
+  });
+  const { registries, identity } = acrAuth;
+  allSecrets.push(...acrAuth.secrets);
 
   const secretsConfig = allSecrets.length > 0 ? allSecrets : undefined;
 
