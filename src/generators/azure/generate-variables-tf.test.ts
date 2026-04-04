@@ -24,6 +24,7 @@ const baseConfig: AzureInfraConfig = {
   spas: {},
   frontends: {},
   scheduledJobs: {},
+  storageBuckets: [],
   noIndex: false,
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',
@@ -86,7 +87,13 @@ describe('generateVariablesTf', () => {
     const config = {
       ...baseConfig,
       workers: {
-        'email-worker': { cpu: 0.25, memory: '0.5Gi', service: 'auth-service' },
+        'email-worker': {
+          cpu: 0.25,
+          memory: '0.5Gi',
+          minInstances: 1,
+          maxInstances: 3,
+          service: 'auth-service',
+        },
       },
     };
 

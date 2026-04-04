@@ -46,8 +46,8 @@ describe('generateVariablesTf', () => {
     it('should define workers map variable with default', () => {
       const result = generateVariablesTf([]);
       expect(result).toContain('variable "workers"');
-      expect(result).toContain('service   = string');
-      expect(result).toContain('dbPoolMax = number');
+      expect(result).toContain('service      = string');
+      expect(result).toContain('dbPoolMax    = number');
       expect(result).toContain('default = {}');
     });
 
@@ -123,12 +123,6 @@ describe('generateVariablesTf', () => {
   });
 
   describe('deployed origins variables', () => {
-    it('should define nextjs_origins for CloudFront', () => {
-      const result = generateVariablesTf([]);
-      expect(result).toContain('variable "nextjs_origins"');
-      expect(result).toContain('type        = map(string)');
-    });
-
     it('should define spa_buckets_ready for CloudFront', () => {
       const result = generateVariablesTf([]);
       expect(result).toContain('variable "spa_buckets_ready"');

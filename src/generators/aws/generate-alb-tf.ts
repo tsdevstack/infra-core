@@ -3,15 +3,17 @@
  *
  * Creates:
  * - Application Load Balancer (public subnets)
- * - Target Groups for ALL services (Kong + backend services)
- * - HTTPS Listener (port 443, default: forwards to Kong, external traffic)
+ * - Target Groups for ALL services (Kong + backend services + Next.js)
+ * - HTTPS Listener (port 443, default: 403, external traffic)
  * - HTTP Listener (port 80, redirects to HTTPS)
  * - Internal HTTPS Listener (port 8443, for Kong upstream routing)
  * - Internal HTTP Listener (port 8080, for Kong OIDC discovery)
  * - Host-based routing rules (Host: {service}.internal → service target group)
  * - OIDC discovery path-based rule (/auth/.well-known/* → auth-service)
  *
- * External traffic (port 443) goes to Kong.
+ * External traffic (port 443) is routed by host:
+ *   - Next.js domains → Next.js target groups (host-based rules, priority 10+)
+ *   - All other traffic → Kong target group (catch-all, priority 100)
  * Kong routes to services via internal HTTPS listener (port 8443) using Host headers.
  * Kong OIDC discovery uses internal HTTP listener (port 8080) so auth-service
  * returns jwks_uri with http://127.0.0.1:8080 that Kong can reach via its own proxy.
@@ -47,6 +49,11 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = true
+
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.id
+    enabled = true
+  }
 
   tags = { Name = "\${var.project_name}-alb" }
 }
@@ -85,6 +92,37 @@ resource "aws_lb_target_group" "service" {
 }
 
 # =============================================================================
+# Target Groups (Next.js services)
+# Routed via host-based rules on the external HTTPS listener (port 443)
+# =============================================================================
+
+resource "aws_lb_target_group" "nextjs" {
+  for_each = var.nextjs_services
+
+  name        = "\${var.project_name}-\${each.key}"
+  port        = 8080
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    path                = "/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    interval            = 30
+    timeout             = 5
+    matcher             = "200"
+  }
+
+  deregistration_delay = 120
+
+  tags = { Name = "\${var.project_name}-\${each.key}-tg" }
+}
+
+# =============================================================================
 # HTTPS Listener (External traffic)
 # Default: reject (403) - only CloudFront with valid X-Origin-Verify header allowed
 # =============================================================================
@@ -111,15 +149,48 @@ resource "aws_lb_listener" "https" {
 }
 
 # =============================================================================
-# Origin Verification Rule (CloudFront -> ALB protection)
+# Next.js Host-Based Routing Rules (priority 10+)
+# Routes CloudFront requests to Next.js target groups based on Host header.
+# AND conditions: both Host header and X-Origin-Verify must match.
+# =============================================================================
+
+resource "aws_lb_listener_rule" "nextjs_origin_verify" {
+  for_each = var.nextjs_services
+
+  listener_arn = aws_lb_listener.https.arn
+  priority     = 10 + index(keys(var.nextjs_services), each.key)
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.nextjs[each.key].arn
+  }
+
+  condition {
+    host_header {
+      values = [each.value.domain]
+    }
+  }
+
+  condition {
+    http_header {
+      http_header_name = "X-Origin-Verify"
+      values           = [random_password.origin_verify_secret.result]
+    }
+  }
+
+  tags = { Name = "\${var.project_name}-\${each.key}-origin-verify-rule" }
+}
+
+# =============================================================================
+# Kong Origin Verification Rule (catch-all, priority 100)
 # CloudFront sends X-Origin-Verify header with secret value.
-# Only requests with valid header are forwarded to Kong.
+# All API traffic (not matched by host-specific rules above) goes to Kong.
 # Direct ALB access (without header) gets 403 from default action.
 # =============================================================================
 
 resource "aws_lb_listener_rule" "origin_verify" {
   listener_arn = aws_lb_listener.https.arn
-  priority     = 1
+  priority     = 100
 
   action {
     type             = "forward"
@@ -223,7 +294,7 @@ resource "aws_lb_listener_rule" "oidc_discovery_http" {
 # =============================================================================
 
 resource "aws_lb_listener_rule" "internal_host" {
-  # Create rules for all services EXCEPT kong (Kong is external only)
+  # Create rules for all services EXCEPT kong
   for_each = { for name, cfg in var.services : name => cfg if name != "kong" }
 
   listener_arn = aws_lb_listener.internal.arn

@@ -26,6 +26,7 @@ describe('generateMainTf', () => {
     spas: {},
     frontends: {},
     scheduledJobs: {},
+    storageBuckets: [],
   };
 
   describe('terraform block', () => {

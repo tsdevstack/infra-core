@@ -19,6 +19,7 @@
 import type {
   FrontendHostingType,
   GcpWafCustomRule,
+  WafRateLimitConfig,
 } from '../../types/index.ts';
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
 import { toDnsAuthName } from '../../utils/gcp/to-dns-auth-name.ts';
@@ -44,6 +45,8 @@ export interface LoadBalancerConfig {
   frontendServices: FrontendServiceConfig[];
   /** Custom WAF rules from infrastructure.json */
   customWafRules?: GcpWafCustomRule[];
+  /** Rate limit override. Default: { count: 1000, intervalSec: 60 } */
+  rateLimit?: WafRateLimitConfig;
   /** Redirect domains (e.g., ["example.com", "example.dev"]) - all redirect to canonicalDomain */
   redirectDomains?: string[];
   /** Canonical domain to redirect to (e.g., "example.io") */
@@ -60,10 +63,14 @@ export function generateLoadBalancerTf(config: LoadBalancerConfig): string {
     apiDomain,
     frontendServices,
     customWafRules,
+    rateLimit,
     redirectDomains,
     canonicalDomain,
     noIndex,
   } = config;
+
+  const rateLimitCount = rateLimit?.count ?? 1000;
+  const rateLimitIntervalSec = rateLimit?.intervalSec ?? 60;
 
   // Generate custom WAF rules if any
   const customRulesHcl = generateCustomWafRules(customWafRules || []);
@@ -120,6 +127,11 @@ resource "google_compute_backend_service" "${toTerraformId(service.name)}" {
     serve_while_stale            = 86400                  # Serve stale while revalidating
     negative_caching             = true                   # Cache 404s
     signed_url_cache_max_age_sec = 0                      # No signed URLs needed
+  }
+
+  log_config {
+    enable      = true
+    sample_rate = 1.0
   }
 
   backend {
@@ -443,10 +455,10 @@ resource "google_compute_security_policy" "default" {
     priority = "1005"
     match {
       expr {
-        expression = "evaluatePreconfiguredWaf('protocolattack-v33-stable', {'sensitivity': 1})"
+        expression = "evaluatePreconfiguredWaf('protocolattack-v33-stable', {'sensitivity': 1, 'opt_out_rule_ids': ['owasp-crs-v030301-id921120-protocolattack', 'owasp-crs-v030301-id921150-protocolattack']})"
       }
     }
-    description = "Block protocol attacks"
+    description = "Block protocol attacks (921120, 921150 excluded: false positive on multipart/form-data CR/LF)"
   }
 
   # Session Fixation (OWASP A07:2021)
@@ -497,7 +509,7 @@ resource "google_compute_security_policy" "default" {
     description = "Block SSRF to cloud metadata"
   }
 ${customRulesHcl}
-  # Rate limiting: 1000 requests per minute per IP
+  # Rate limiting: ${rateLimitCount} requests per ${rateLimitIntervalSec}s per IP
   rule {
     action   = "throttle"
     priority = "2000"
@@ -511,12 +523,12 @@ ${customRulesHcl}
       conform_action = "allow"
       exceed_action  = "deny(429)"
       rate_limit_threshold {
-        count        = 1000
-        interval_sec = 60
+        count        = ${rateLimitCount}
+        interval_sec = ${rateLimitIntervalSec}
       }
       enforce_on_key = "IP"
     }
-    description = "Rate limit: 1000 requests/min per IP"
+    description = "Rate limit: ${rateLimitCount} requests/${rateLimitIntervalSec}s per IP"
   }
 }
 
@@ -549,6 +561,11 @@ resource "google_compute_backend_service" "kong" {
     "Referrer-Policy: strict-origin-when-cross-origin",
     "Permissions-Policy: camera=(), microphone=(), geolocation=()"
   ]
+
+  log_config {
+    enable      = true
+    sample_rate = 1.0
+  }
 
   backend {
     group = google_compute_region_network_endpoint_group.kong_neg.id

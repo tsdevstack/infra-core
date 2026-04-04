@@ -106,10 +106,12 @@ function formatWorkersMap(workers: AWSInfraConfig['workers']): string {
   const lines = entries.map(
     ([name, cfg]) =>
       `  "${name}" = {
-    cpu       = ${cfg.cpu}
-    memory    = ${parseInt(cfg.memory, 10)}
-    service   = "${cfg.service}"
-    dbPoolMax = ${cfg.dbPoolMax ?? 5}
+    cpu          = ${cfg.cpu}
+    memory       = ${parseInt(cfg.memory, 10)}
+    minInstances = ${cfg.minInstances}
+    maxInstances = ${cfg.maxInstances}
+    service      = "${cfg.service}"
+    dbPoolMax    = ${cfg.dbPoolMax ?? 5}
   }`,
   );
 

@@ -1,0 +1,144 @@
+import { describe, it, expect } from '@rstest/core';
+import { generateGcsStorageTf } from './generate-gcs-storage-tf';
+import type { GCPInfraConfig } from '../../types/config.ts';
+
+const baseConfig: GCPInfraConfig = {
+  provider: 'gcp',
+  projectName: 'myproject',
+  environment: 'dev',
+  gcpProjectId: 'myproject-dev-123456',
+  region: 'us-central1',
+  stateBucket: 'myproject-tf-state-myproject-dev-123456',
+  database: {
+    tier: 'db-f1-micro',
+    storageSizeGb: 10,
+    deletionProtection: false,
+    backup: false,
+  },
+  redis: { tier: 'BASIC', memoryGb: 1 },
+  servicesWithDatabase: [],
+  baseDomain: '',
+  services: {},
+  workers: {},
+  allDeployables: {},
+  spas: {},
+  frontends: {},
+  scheduledJobs: {},
+  storageBuckets: ['uploads', 'media'],
+};
+
+describe('generateGcsStorageTf', () => {
+  describe('empty buckets', () => {
+    it('should return empty string when no buckets configured', () => {
+      const config = { ...baseConfig, storageBuckets: [] };
+      expect(generateGcsStorageTf(config)).toBe('');
+    });
+  });
+
+  describe('GCS buckets', () => {
+    it('should create GCS bucket resource with for_each', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('resource "google_storage_bucket" "storage"');
+      expect(result).toContain('for_each = local.storage_buckets');
+    });
+
+    it('should build correct bucket names in locals', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('"uploads" = "myproject-uploads-dev"');
+      expect(result).toContain('"media" = "myproject-media-dev"');
+    });
+
+    it('should set force_destroy to true', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('force_destroy = true');
+    });
+
+    it('should enable uniform bucket-level access', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('uniform_bucket_level_access = true');
+    });
+
+    it('should use gcp_region variable for location', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('location      = var.gcp_region');
+    });
+  });
+
+  describe('CORS configuration', () => {
+    it('should allow all origins', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('origin          = ["*"]');
+    });
+
+    it('should allow standard HTTP methods', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain(
+        'method          = ["GET", "PUT", "POST", "DELETE", "HEAD"]',
+      );
+    });
+  });
+
+  describe('soft delete policy', () => {
+    it('should set 7-day retention', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('soft_delete_policy {');
+      expect(result).toContain('retention_duration_seconds = 604800');
+    });
+  });
+
+  describe('IAM bindings', () => {
+    it('should grant storage.objectUser to runtime service accounts', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain(
+        'resource "google_storage_bucket_iam_member" "storage_object_user"',
+      );
+      expect(result).toContain('role   = "roles/storage.objectUser"');
+    });
+
+    it('should use setproduct of buckets and services for objectUser binding', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain(
+        'setproduct(keys(local.storage_buckets), local.services)',
+      );
+    });
+
+    it('should grant serviceAccountTokenCreator for presigned URLs', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain(
+        'resource "google_project_iam_member" "storage_token_creator"',
+      );
+      expect(result).toContain(
+        'role    = "roles/iam.serviceAccountTokenCreator"',
+      );
+    });
+
+    it('should iterate over local.services for token creator role', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('for_each = toset(local.services)');
+    });
+  });
+
+  describe('output', () => {
+    it('should output storage_buckets map', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('output "storage_buckets"');
+    });
+
+    it('should include name field in output', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('name     = bucket.name');
+    });
+
+    it('should include location in output', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('location = bucket.location');
+    });
+  });
+
+  describe('header comment', () => {
+    it('should include generation comment', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain('Generated by: npx tsdevstack infra:generate');
+    });
+  });
+});

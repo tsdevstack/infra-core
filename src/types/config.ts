@@ -102,6 +102,8 @@ export interface SPAConfig {
 export interface WorkerConfig {
   cpu: number;
   memory: string;
+  minInstances: number;
+  maxInstances: number;
   /** The parent service this worker belongs to */
   service: string;
   /** Database connection pool max — AWS only */
@@ -212,11 +214,50 @@ export interface AwsWafCustomRule {
  * Provider-specific rule types coexist on the same config.
  * Generators pick the relevant rules for their provider.
  */
+/**
+ * Azure WAF match condition
+ */
+export interface AzureWafMatchCondition {
+  matchVariable:
+    | 'RequestUri'
+    | 'RequestMethod'
+    | 'RequestHeader'
+    | 'RequestBody'
+    | 'SocketAddr'
+    | 'QueryString';
+  operator: 'Contains' | 'Equal' | 'IPMatch' | 'GreaterThan';
+  matchValues: string[];
+  transforms?: string[];
+  /** Header name (required when matchVariable is 'RequestHeader') */
+  selector?: string;
+}
+
+/**
+ * Custom WAF rule for Azure Front Door
+ */
+export interface AzureWafCustomRule {
+  name: string;
+  type: 'MatchRule' | 'RateLimitRule';
+  /** Rule priority (use 1000+ to avoid conflicts with framework rules) */
+  priority: number;
+  action: 'Block' | 'Allow' | 'Log';
+  matchConditions: AzureWafMatchCondition[];
+  description?: string;
+  /** Required when type is 'RateLimitRule' */
+  rateLimitDurationInMinutes?: number;
+  /** Required when type is 'RateLimitRule' */
+  rateLimitThreshold?: number;
+}
+
 export interface WafConfig {
   /** GCP Cloud Armor custom rules */
   gcpCustomRules?: GcpWafCustomRule[];
   /** AWS WAF v2 custom rules */
   awsCustomRules?: AwsWafCustomRule[];
+  /** Azure Front Door custom rules */
+  azureCustomRules?: AzureWafCustomRule[];
+  /** Global rate limit override. Default: { count: 1000, intervalSec: 60 } */
+  rateLimit?: WafRateLimitConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,6 +290,9 @@ export interface BaseInfraConfig {
   waf?: WafConfig;
   /** Add X-Robots-Tag: noindex, nofollow header */
   noIndex?: boolean;
+
+  // Storage
+  storageBuckets: string[];
 
   // Scheduling
   scheduledJobs: Record<string, ScheduledJobConfig>;

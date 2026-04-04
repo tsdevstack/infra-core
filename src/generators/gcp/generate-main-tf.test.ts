@@ -26,6 +26,7 @@ describe('generateMainTf', () => {
     workers: {},
     scheduledJobs: {},
     allDeployables: {},
+    storageBuckets: [],
   };
 
   describe('terraform block', () => {

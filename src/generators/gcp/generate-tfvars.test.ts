@@ -26,6 +26,7 @@ describe('generateTfvars', () => {
     workers: {},
     scheduledJobs: {},
     allDeployables: {},
+    storageBuckets: [],
   };
 
   describe('core values', () => {

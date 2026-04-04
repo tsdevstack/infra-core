@@ -89,9 +89,11 @@ describe('generateDatabaseTf', () => {
       expect(result).toContain('backup_window             = "03:00-04:00"');
     });
 
-    it('should enable deletion protection by default', () => {
+    it('should use deletion protection variable', () => {
       const result = generateDatabaseTf();
-      expect(result).toContain('deletion_protection       = true');
+      expect(result).toContain(
+        'deletion_protection       = var.database_deletion_protection',
+      );
     });
 
     it('should not skip final snapshot', () => {

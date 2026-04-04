@@ -69,84 +69,6 @@ const WAF_CUSTOM_RULES: WafCustomRule[] = [
     ],
     comment: 'Rate limit: 1000 req/min per IP',
   },
-  {
-    name: 'RateLimitAuth',
-    type: 'RateLimitRule',
-    priority: 101,
-    action: 'Block',
-    rateLimitDurationInMinutes: 1,
-    rateLimitThreshold: 50,
-    matchConditions: [
-      {
-        matchVariable: 'RequestUri',
-        operator: 'Contains',
-        matchValues: [
-          '/auth/',
-          '/login',
-          '/signin',
-          '/signup',
-          '/register',
-          '/forgot',
-          '/reset-password',
-          '/token',
-          '/oauth',
-        ],
-        transforms: TRANSFORMS_STANDARD,
-      },
-    ],
-    comment: 'Rate limit: 50 req/min on auth endpoints',
-  },
-  {
-    name: 'RateLimitAPI',
-    type: 'RateLimitRule',
-    priority: 102,
-    action: 'Block',
-    rateLimitDurationInMinutes: 1,
-    rateLimitThreshold: 500,
-    matchConditions: [
-      {
-        matchVariable: 'RequestUri',
-        operator: 'Contains',
-        matchValues: ['/api/'],
-        transforms: TRANSFORMS_STANDARD,
-      },
-    ],
-    comment: 'Rate limit: 500 req/min on API endpoints',
-  },
-  {
-    name: 'RateLimitGraphQL',
-    type: 'RateLimitRule',
-    priority: 103,
-    action: 'Block',
-    rateLimitDurationInMinutes: 1,
-    rateLimitThreshold: 200,
-    matchConditions: [
-      {
-        matchVariable: 'RequestUri',
-        operator: 'Contains',
-        matchValues: ['/graphql'],
-        transforms: TRANSFORMS_STANDARD,
-      },
-    ],
-    comment: 'Rate limit: 200 req/min on GraphQL',
-  },
-  {
-    name: 'RateLimitWebhooks',
-    type: 'RateLimitRule',
-    priority: 104,
-    action: 'Block',
-    rateLimitDurationInMinutes: 1,
-    rateLimitThreshold: 300,
-    matchConditions: [
-      {
-        matchVariable: 'RequestUri',
-        operator: 'Contains',
-        matchValues: ['/webhook', '/callback'],
-        transforms: TRANSFORMS_STANDARD,
-      },
-    ],
-    comment: 'Rate limit: 300 req/min on webhooks',
-  },
 
   // ===== Size Restrictions (150-199) =====
   {
@@ -243,7 +165,6 @@ const WAF_CUSTOM_RULES: WafCustomRule[] = [
         matchVariable: 'RequestUri',
         operator: 'Contains',
         matchValues: [
-          '/admin',
           '/wp-admin',
           '/wp-login',
           '/phpmyadmin',
@@ -1887,16 +1808,41 @@ function renderMatchCondition(mc: WafMatchCondition): string {
 interface WafCustomRulesOptions {
   /** Skip rules in priority bands 500-899 (covered by DRS 2.1 managed rulesets on Premium) */
   skipManagedBands?: boolean;
+  /** Rate limit override. Default: { count: 1000, intervalSec: 60 } */
+  rateLimit?: { count: number; intervalSec: number };
 }
 
 export function generateWafCustomRules(
   options?: WafCustomRulesOptions,
 ): string {
-  const rules = options?.skipManagedBands
+  let rules = options?.skipManagedBands
     ? WAF_CUSTOM_RULES.filter(
         (rule) => rule.priority < 500 || rule.priority > 899,
       )
-    : WAF_CUSTOM_RULES;
+    : [...WAF_CUSTOM_RULES];
+
+  // Apply rate limit override to RateLimitGlobal rule
+  if (options?.rateLimit) {
+    const rateLimitMinutes = Math.max(
+      1,
+      Math.round(options.rateLimit.intervalSec / 60),
+    );
+    const rateLimitThreshold = Math.round(
+      (options.rateLimit.count / options.rateLimit.intervalSec) *
+        rateLimitMinutes *
+        60,
+    );
+    rules = rules.map((rule) =>
+      rule.name === 'RateLimitGlobal'
+        ? {
+            ...rule,
+            rateLimitDurationInMinutes: rateLimitMinutes,
+            rateLimitThreshold,
+            comment: `Rate limit: ${rateLimitThreshold} req/${rateLimitMinutes}min per IP`,
+          }
+        : rule,
+    );
+  }
 
   return rules
     .map((rule) => {

@@ -27,3 +27,4 @@ export {
 export { generateCloudSchedulerTf } from './generate-cloud-scheduler-tf.ts';
 export { generateCustomWafRules } from './generate-custom-waf-rules.ts';
 export { generateSpaEdgeSecurityPolicy } from './generate-spa-edge-security-policy.ts';
+export { generateGcsStorageTf } from './generate-gcs-storage-tf.ts';

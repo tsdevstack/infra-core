@@ -377,7 +377,7 @@ describe('generateLoadBalancerTf', () => {
       expect(result).toContain('priority = "1008"');
     });
 
-    it('should include rate limiting', () => {
+    it('should include rate limiting with defaults', () => {
       const result = generateLoadBalancerTf({
         apiDomain: 'api.example.com',
         frontendServices: [],
@@ -386,6 +386,17 @@ describe('generateLoadBalancerTf', () => {
       expect(result).toContain('action   = "throttle"');
       expect(result).toContain('count        = 1000');
       expect(result).toContain('interval_sec = 60');
+    });
+
+    it('should use custom rate limit when provided', () => {
+      const result = generateLoadBalancerTf({
+        apiDomain: 'api.example.com',
+        frontendServices: [],
+        rateLimit: { count: 500, intervalSec: 30 },
+      });
+
+      expect(result).toContain('count        = 500');
+      expect(result).toContain('interval_sec = 30');
     });
 
     it('should attach security policy to Kong backend', () => {

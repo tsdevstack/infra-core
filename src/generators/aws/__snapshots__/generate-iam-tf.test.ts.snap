@@ -83,5 +83,46 @@ resource "aws_iam_role_policy" "task_secrets" {
     }]
   })
 }
+
+# =============================================================================
+# Next.js Task Roles (Per Next.js Service)
+# Runtime permissions for what the running Next.js container can do
+# =============================================================================
+
+resource "aws_iam_role" "nextjs_task" {
+  for_each = var.nextjs_services
+
+  name = "\${var.project_name}-\${each.key}-task"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = { Name = "\${var.project_name}-\${each.key}-task" }
+}
+
+resource "aws_iam_role_policy" "nextjs_task_secrets" {
+  for_each = var.nextjs_services
+
+  name = "secrets-access"
+  role = aws_iam_role.nextjs_task[each.key].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = [
+        "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-shared-*",
+        "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${each.key}-*"
+      ]
+    }]
+  })
+}
 "
 `;

@@ -29,6 +29,28 @@ export function generateDiagnosticsTf(config: AzureInfraConfig): string {
 # Azure Security Center compliance and operational visibility.
 
 # =============================================================================
+# Front Door Diagnostic Settings
+# =============================================================================
+
+resource "azurerm_monitor_diagnostic_setting" "frontdoor" {
+  name                       = "frontdoor-diagnostics"
+  target_resource_id         = azurerm_cdn_frontdoor_profile.main.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+
+  enabled_log {
+    category = "FrontDoorAccessLog"
+  }
+
+  enabled_log {
+    category = "FrontDoorHealthProbeLog"
+  }
+
+  enabled_log {
+    category = "FrontDoorWebApplicationFirewallLog"
+  }
+}
+
+# =============================================================================
 # PostgreSQL Diagnostic Settings
 # =============================================================================
 

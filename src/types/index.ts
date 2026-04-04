@@ -18,6 +18,8 @@ export type {
   AwsWafByteMatchConfig,
   AwsWafGeoMatchConfig,
   AwsWafCustomRule,
+  AzureWafMatchCondition,
+  AzureWafCustomRule,
   WafConfig,
   BaseInfraConfig,
   AzureInfraConfig,

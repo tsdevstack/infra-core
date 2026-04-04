@@ -26,6 +26,7 @@ describe('generateDatabaseTf', () => {
     workers: {},
     scheduledJobs: {},
     allDeployables: {},
+    storageBuckets: [],
   };
 
   describe('Cloud SQL instance', () => {

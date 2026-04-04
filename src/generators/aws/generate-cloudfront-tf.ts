@@ -79,6 +79,12 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  logging_config {
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "api/"
+    include_cookies = false
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"

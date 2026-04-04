@@ -30,6 +30,8 @@ export interface DeployEcsServiceWithSecretsOptions {
   serviceName: string;
   imageUri: string;
   hasDatabase: boolean;
+  /** Additional secrets to inject (env var name → Secrets Manager ARN) */
+  additionalSecrets?: Record<string, string>;
 }
 
 export interface DeployEcsServiceWithSecretsResult {
@@ -51,6 +53,7 @@ export async function deployEcsServiceWithSecrets(
     serviceName,
     imageUri,
     hasDatabase,
+    additionalSecrets,
   } = options;
 
   const region = credentials.region;
@@ -111,6 +114,16 @@ export async function deployEcsServiceWithSecrets(
         name: 'DATABASE_URL',
         valueFrom: `arn:aws:secretsmanager:${region}:${accountId}:secret:${dbSecretName}`,
       });
+    }
+
+    // Add additional secrets (e.g. API_URL, KONG_INTERNAL_URL for Next.js)
+    if (additionalSecrets) {
+      for (const [envVar, arn] of Object.entries(additionalSecrets)) {
+        secretsArray.push({
+          name: envVar,
+          valueFrom: arn,
+        });
+      }
     }
 
     // Step 3: Register new task definition with secrets

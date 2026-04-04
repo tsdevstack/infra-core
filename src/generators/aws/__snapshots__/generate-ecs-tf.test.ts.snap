@@ -199,6 +199,9 @@ resource "aws_ecs_task_definition" "worker" {
     name  = each.key
     image = "\${aws_ecr_repository.service[each.value.service].repository_url}:latest"
 
+    # Override Dockerfile CMD to run worker entrypoint instead of main API server
+    command = ["dumb-init", "node", "dist/worker.js"]
+
     environment = [
       { name = "NODE_ENV", value = "production" },
       { name = "SERVICE_NAME", value = each.value.service },
@@ -225,7 +228,7 @@ resource "aws_ecs_task_definition" "worker" {
 
 # =============================================================================
 # ECS Services (Workers - Always Running)
-# Workers poll Redis and cannot scale to zero
+# Workers poll Redis — minInstances >= 1 enforced by CLI
 # =============================================================================
 
 resource "aws_ecs_service" "worker" {
@@ -234,7 +237,7 @@ resource "aws_ecs_service" "worker" {
   name            = each.key
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.worker[each.key].arn
-  desired_count   = 1  # Always at least 1
+  desired_count   = each.value.minInstances
   launch_type     = "FARGATE"
 
   # Zero-downtime deployment: keep old task until new one is healthy
@@ -264,6 +267,196 @@ resource "aws_ecs_service" "worker" {
     # desired_count: Auto-scaling manages this
     ignore_changes = [task_definition, desired_count]
   }
+}
+
+# =============================================================================
+# Worker Auto Scaling
+# Workers scale based on CPU utilization within their configured min/max range
+# =============================================================================
+
+resource "aws_appautoscaling_target" "worker" {
+  for_each = var.workers
+
+  max_capacity       = each.value.maxInstances
+  min_capacity       = each.value.minInstances
+  resource_id        = "service/\${aws_ecs_cluster.main.name}/\${aws_ecs_service.worker[each.key].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  depends_on = [aws_ecs_service.worker]
+}
+
+resource "aws_appautoscaling_policy" "worker_cpu" {
+  for_each = var.workers
+
+  name               = "\${var.project_name}-\${each.key}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.worker[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.worker[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.worker[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70.0
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+  }
+
+  depends_on = [aws_appautoscaling_target.worker]
+}
+
+# =============================================================================
+# CloudWatch Log Groups (Next.js)
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "nextjs" {
+  for_each          = var.nextjs_services
+  name              = "/ecs/\${var.project_name}/\${each.key}"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.logs.arn
+
+  tags = { Name = "\${var.project_name}-\${each.key}-logs" }
+}
+
+# =============================================================================
+# Task Definitions (Next.js)
+# Same Docker image as built by CLI, uses Dockerfile CMD (no command override)
+# =============================================================================
+
+resource "aws_ecs_task_definition" "nextjs" {
+  for_each = var.nextjs_services
+
+  family                   = "\${var.project_name}-\${each.key}"
+  requires_compatibilities = ["FARGATE"]
+  network_mode             = "awsvpc"
+  cpu                      = each.value.cpu
+  memory                   = each.value.memory
+  execution_role_arn       = aws_iam_role.ecs_execution.arn
+  task_role_arn            = aws_iam_role.nextjs_task[each.key].arn
+
+  container_definitions = jsonencode([{
+    name  = each.key
+    image = "\${aws_ecr_repository.service[each.key].repository_url}:latest"
+
+    portMappings = [{
+      containerPort = 8080
+      protocol      = "tcp"
+    }]
+
+    environment = [
+      { name = "NODE_ENV", value = "production" },
+      { name = "PORT", value = "8080" },
+      { name = "HOSTNAME", value = "0.0.0.0" },
+      { name = "SERVICE_NAME", value = each.key },
+      { name = "CLOUD_PROVIDER", value = "aws" },
+      { name = "SECRETS_PROVIDER", value = "aws" },
+      { name = "AWS_REGION", value = var.aws_region },
+      { name = "PROJECT_NAME", value = var.project_name },
+    ]
+
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = "/ecs/\${var.project_name}/\${each.key}"
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "ecs"
+      }
+    }
+
+    healthCheck = {
+      command     = ["CMD-SHELL", "node -e \\"fetch('http://localhost:8080/health').then(r=>{if(!r.ok)throw r.status}).catch(()=>process.exit(1))\\""]
+      interval    = 30
+      timeout     = 5
+      retries     = 3
+      startPeriod = 60
+    }
+  }])
+
+  tags = { Name = "\${var.project_name}-\${each.key}-task" }
+}
+
+# =============================================================================
+# ECS Services (Next.js)
+# Routed via ALB host-based rules on port 443 (not through Kong)
+# =============================================================================
+
+resource "aws_ecs_service" "nextjs" {
+  for_each = var.nextjs_services
+
+  name            = each.key
+  cluster         = aws_ecs_cluster.main.id
+  task_definition = aws_ecs_task_definition.nextjs[each.key].arn
+  desired_count   = max(each.value.minInstances, 1)
+  launch_type     = "FARGATE"
+
+  health_check_grace_period_seconds = 120
+
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  network_configuration {
+    subnets          = aws_subnet.private[*].id
+    security_groups  = [aws_security_group.ecs.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.nextjs[each.key].arn
+    container_name   = each.key
+    container_port   = 8080
+  }
+
+  depends_on = [aws_lb_listener.https]
+
+  tags = { Name = "\${var.project_name}-\${each.key}-service" }
+
+  lifecycle {
+    ignore_changes = [task_definition, desired_count]
+  }
+}
+
+# =============================================================================
+# Next.js Auto Scaling
+# =============================================================================
+
+resource "aws_appautoscaling_target" "nextjs" {
+  for_each = var.nextjs_services
+
+  max_capacity       = each.value.maxInstances
+  min_capacity       = max(each.value.minInstances, 1)
+  resource_id        = "service/\${aws_ecs_cluster.main.name}/\${aws_ecs_service.nextjs[each.key].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  depends_on = [aws_ecs_service.nextjs]
+}
+
+resource "aws_appautoscaling_policy" "nextjs_cpu" {
+  for_each = var.nextjs_services
+
+  name               = "\${var.project_name}-\${each.key}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.nextjs[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.nextjs[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.nextjs[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70.0
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+  }
+
+  depends_on = [aws_appautoscaling_target.nextjs]
 }
 "
 `;

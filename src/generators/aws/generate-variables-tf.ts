@@ -65,10 +65,12 @@ variable "services" {
 variable "workers" {
   description = "Map of workers with their resource configuration"
   type = map(object({
-    cpu       = number
-    memory    = number
-    service   = string  # The base service this worker belongs to
-    dbPoolMax = number  # Database connection pool size per instance
+    cpu          = number
+    memory       = number
+    minInstances = number  # 1+ (workers must always run for queue polling)
+    maxInstances = number
+    service      = string  # The base service this worker belongs to
+    dbPoolMax    = number  # Database connection pool size per instance
   }))
   default = {}
 }
@@ -91,7 +93,7 @@ variable "spa_services" {
 }
 
 # ─────────────────────────────────────────
-# Next.js Services (App Runner + CloudFront)
+# Next.js Services (ECS + CloudFront)
 # ─────────────────────────────────────────
 
 variable "nextjs_services" {
@@ -166,20 +168,7 @@ variable "redis_high_availability" {
 
 # ─────────────────────────────────────────
 # Deployed Origins (detected by CLI)
-# Used to conditionally create CloudFront only when origins exist
 # ─────────────────────────────────────────
-
-variable "nextjs_origins" {
-  description = "Deployed App Runner URLs for Next.js services (detected by CLI)"
-  type        = map(string)
-  default     = {}
-}
-
-variable "nextjs_service_arns" {
-  description = "Deployed App Runner service ARNs for WAF association (detected by CLI)"
-  type        = map(string)
-  default     = {}
-}
 
 variable "spa_buckets_ready" {
   description = "SPA buckets that have content deployed (detected by CLI)"

@@ -34,6 +34,15 @@ resource "aws_wafv2_web_acl" "main" {
       managed_rule_group_statement {
         vendor_name = "AWS"
         name        = "AWSManagedRulesCommonRuleSet"
+
+        # SizeRestrictions_BODY blocks request bodies > 8KB, which breaks file uploads.
+        # Upload size is enforced by Kong (maxUploadSize in infrastructure.json).
+        rule_action_override {
+          name = "SizeRestrictions_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
 
@@ -120,7 +129,7 @@ resource "aws_wafv2_web_acl" "main" {
     }
   }
 
-  # Rate Limiting
+  # Rate Limiting (1000 req/60s → 5000 per 5min AWS window)
   rule {
     name     = "RateLimit"
     priority = 5
@@ -131,7 +140,7 @@ resource "aws_wafv2_web_acl" "main" {
 
     statement {
       rate_based_statement {
-        limit              = 1000
+        limit              = 5000
         aggregate_key_type = "IP"
       }
     }
@@ -264,7 +273,9 @@ resource "aws_wafv2_web_acl" "main" {
             positional_constraint = "CONTAINS"
             search_string         = "__proto__"
             field_to_match {
-              body {}
+              body {
+                oversize_handling = "CONTINUE"
+              }
             }
             text_transformation {
               priority = 0
@@ -338,7 +349,9 @@ resource "aws_wafv2_web_acl" "main" {
             positional_constraint = "CONTAINS"
             search_string         = "child_process"
             field_to_match {
-              body {}
+              body {
+                oversize_handling = "CONTINUE"
+              }
             }
             text_transformation {
               priority = 0

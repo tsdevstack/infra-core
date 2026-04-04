@@ -1,36 +1,60 @@
 import { describe, it, expect } from '@rstest/core';
 import { generateWafCustomRules } from './generate-waf-custom-rules';
 
+/**
+ * Extract a specific custom_rule block by name from generated HCL.
+ * Returns the text between `name = "ruleName"` and the next `custom_rule {` (or end of string).
+ */
+function extractRuleBlock(hcl: string, ruleName: string): string {
+  const marker = `name     = "${ruleName}"`;
+  const start = hcl.indexOf(marker);
+  if (start === -1) return '';
+  const nextRule = hcl.indexOf('custom_rule {', start + marker.length);
+  return nextRule === -1 ? hcl.slice(start) : hcl.slice(start, nextRule);
+}
+
 describe('generateWafCustomRules', () => {
   describe('Rate Limiting (100-149)', () => {
     it('should include global rate limit at 1000/min', () => {
       const result = generateWafCustomRules();
-      expect(result).toContain('name     = "RateLimitGlobal"');
-      expect(result).toContain('type     = "RateLimitRule"');
-      expect(result).toContain('priority = 100');
-      expect(result).toContain('rate_limit_threshold           = 1000');
-      expect(result).toContain('rate_limit_duration_in_minutes = 1');
+      const block = extractRuleBlock(result, 'RateLimitGlobal');
+      expect(block).toContain('rate_limit_threshold           = 1000');
+      expect(block).toContain('rate_limit_duration_in_minutes = 1');
     });
 
     it('should match all IPs for global rate limit', () => {
       const result = generateWafCustomRules();
-      expect(result).toContain('"0.0.0.0/0"');
-      expect(result).toContain('"::/0"');
+      const block = extractRuleBlock(result, 'RateLimitGlobal');
+      expect(block).toContain('"0.0.0.0/0"');
+      expect(block).toContain('"::/0"');
     });
 
-    it('should include auth endpoint rate limit at 50/min', () => {
+    it('should only have global rate limit (no per-endpoint rate limits)', () => {
       const result = generateWafCustomRules();
-      expect(result).toContain('name     = "RateLimitAuth"');
-      expect(result).toContain('rate_limit_threshold           = 50');
-      expect(result).toContain('"/login"');
-      expect(result).toContain('"/oauth"');
+      expect(result).not.toContain('RateLimitAuth');
+      expect(result).not.toContain('RateLimitAPI');
+      expect(result).not.toContain('RateLimitGraphQL');
+      expect(result).not.toContain('RateLimitWebhooks');
     });
 
-    it('should include API, GraphQL, and webhook rate limits', () => {
-      const result = generateWafCustomRules();
-      expect(result).toContain('name     = "RateLimitAPI"');
-      expect(result).toContain('name     = "RateLimitGraphQL"');
-      expect(result).toContain('name     = "RateLimitWebhooks"');
+    it('should use custom rate limit when provided', () => {
+      const result = generateWafCustomRules({
+        rateLimit: { count: 500, intervalSec: 30 },
+      });
+      // 500 req/30s = 1000 req/min (Azure minimum window is 1 minute)
+      const block = extractRuleBlock(result, 'RateLimitGlobal');
+      expect(block).toContain('rate_limit_threshold           = 1000');
+      expect(block).toContain('rate_limit_duration_in_minutes = 1');
+    });
+
+    it('should scale rate limit for longer intervals', () => {
+      const result = generateWafCustomRules({
+        rateLimit: { count: 2000, intervalSec: 120 },
+      });
+      // 2000 req/120s = 2000 req/2min
+      const block = extractRuleBlock(result, 'RateLimitGlobal');
+      expect(block).toContain('rate_limit_threshold           = 2000');
+      expect(block).toContain('rate_limit_duration_in_minutes = 2');
     });
   });
 
@@ -69,10 +93,11 @@ describe('generateWafCustomRules', () => {
     it('should block WordPress/CMS scanner paths', () => {
       const result = generateWafCustomRules();
       expect(result).toContain('name     = "BlockRestrictedPaths"');
-      expect(result).toContain('"/admin"');
       expect(result).toContain('"/wp-admin"');
       expect(result).toContain('"/cgi-bin"');
       expect(result).toContain('"/xmlrpc.php"');
+      // /admin intentionally NOT blocked — too generic, legitimate apps may use it
+      expect(result).not.toContain('"/admin"');
     });
 
     it('should block hidden files including expanded list', () => {
@@ -448,7 +473,7 @@ describe('generateWafCustomRules', () => {
     it('should generate exactly 79 custom_rule blocks', () => {
       const result = generateWafCustomRules();
       const count = (result.match(/custom_rule \{/g) ?? []).length;
-      expect(count).toBe(79);
+      expect(count).toBe(75);
     });
 
     it('should have unique priorities for all rules', () => {
@@ -460,8 +485,8 @@ describe('generateWafCustomRules', () => {
         priorities.push(match[1]);
       }
       const uniquePriorities = new Set(priorities);
-      expect(priorities.length).toBe(79);
-      expect(uniquePriorities.size).toBe(79);
+      expect(priorities.length).toBe(75);
+      expect(uniquePriorities.size).toBe(75);
     });
 
     it('should have unique names for all rules', () => {
@@ -473,8 +498,8 @@ describe('generateWafCustomRules', () => {
         names.push(match[1]);
       }
       const uniqueNames = new Set(names);
-      expect(names.length).toBe(79);
-      expect(uniqueNames.size).toBe(79);
+      expect(names.length).toBe(75);
+      expect(uniqueNames.size).toBe(75);
     });
 
     it('should have alphanumeric names only (Azure WAF requirement)', () => {
@@ -495,19 +520,19 @@ describe('generateWafCustomRules', () => {
       const actionLines = result
         .split('\n')
         .filter((line) => line.includes('action   ='));
-      expect(actionLines.length).toBe(79);
+      expect(actionLines.length).toBe(75);
       for (const line of actionLines) {
         expect(line).toContain('"Block"');
       }
     });
 
-    it('should have 5 RateLimitRule and 74 MatchRule', () => {
+    it('should have 1 RateLimitRule and 74 MatchRule', () => {
       const result = generateWafCustomRules();
       const rateLimitCount = (result.match(/type\s+= "RateLimitRule"/g) ?? [])
         .length;
       const matchRuleCount = (result.match(/type\s+= "MatchRule"/g) ?? [])
         .length;
-      expect(rateLimitCount).toBe(5);
+      expect(rateLimitCount).toBe(1);
       expect(matchRuleCount).toBe(74);
     });
 
@@ -547,27 +572,27 @@ describe('generateWafCustomRules', () => {
       const result = generateWafCustomRules();
       const rateLimitOccurrences = (result.match(/rate_limit_threshold/g) ?? [])
         .length;
-      expect(rateLimitOccurrences).toBe(5);
+      expect(rateLimitOccurrences).toBe(1);
     });
   });
 
   describe('skipManagedBands (Premium tier)', () => {
-    it('should return 35 custom rules when skipManagedBands is true', () => {
+    it('should return 31 custom rules when skipManagedBands is true', () => {
       const result = generateWafCustomRules({ skipManagedBands: true });
       const ruleCount = (result.match(/custom_rule \{/g) ?? []).length;
-      expect(ruleCount).toBe(35);
+      expect(ruleCount).toBe(31);
     });
 
     it('should return 79 custom rules when skipManagedBands is false', () => {
       const result = generateWafCustomRules({ skipManagedBands: false });
       const ruleCount = (result.match(/custom_rule \{/g) ?? []).length;
-      expect(ruleCount).toBe(79);
+      expect(ruleCount).toBe(75);
     });
 
     it('should return 79 custom rules when no options provided', () => {
       const result = generateWafCustomRules();
       const ruleCount = (result.match(/custom_rule \{/g) ?? []).length;
-      expect(ruleCount).toBe(79);
+      expect(ruleCount).toBe(75);
     });
 
     it('should exclude SQL injection rules (500-599) when skipping', () => {

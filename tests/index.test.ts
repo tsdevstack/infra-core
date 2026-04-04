@@ -93,6 +93,7 @@ describe('InfraConfig discriminated union', () => {
     redis: { tier: 'basic' },
     servicesWithDatabase: [],
     baseDomain: 'example.com',
+    storageBuckets: [],
     scheduledJobs: {},
     allDeployables: {},
   };

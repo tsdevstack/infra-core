@@ -40,10 +40,12 @@ services = {
 
 workers = {
   "auth-worker" = {
-    cpu       = 256
-    memory    = 512
-    service   = "auth-service"
-    dbPoolMax = 8
+    cpu          = 256
+    memory       = 512
+    minInstances = 1
+    maxInstances = 3
+    service      = "auth-service"
+    dbPoolMax    = 8
   }
 }
 

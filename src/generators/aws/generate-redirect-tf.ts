@@ -146,6 +146,12 @@ resource "aws_cloudfront_distribution" "redirect_${tfId}" {
     }
   }
 
+  logging_config {
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "redirect/${tfId}/"
+    include_cookies = false
+  }
+
   viewer_certificate {
     acm_certificate_arn      = aws_acm_certificate_validation.redirect_${tfId}.certificate_arn
     ssl_support_method       = "sni-only"

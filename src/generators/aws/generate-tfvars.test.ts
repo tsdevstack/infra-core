@@ -26,6 +26,7 @@ describe('generateTfvars', () => {
     spas: {},
     frontends: {},
     scheduledJobs: {},
+    storageBuckets: [],
   };
 
   describe('core values', () => {
@@ -114,6 +115,8 @@ describe('generateTfvars', () => {
           'auth-worker': {
             cpu: 256,
             memory: '512',
+            minInstances: 1,
+            maxInstances: 3,
             service: 'auth-service',
             dbPoolMax: 8,
           },
@@ -121,8 +124,10 @@ describe('generateTfvars', () => {
       };
       const result = generateTfvars(config);
       expect(result).toContain('"auth-worker" = {');
-      expect(result).toContain('service   = "auth-service"');
-      expect(result).toContain('dbPoolMax = 8');
+      expect(result).toContain('service      = "auth-service"');
+      expect(result).toContain('dbPoolMax    = 8');
+      expect(result).toContain('minInstances = 1');
+      expect(result).toContain('maxInstances = 3');
     });
   });
 
@@ -303,6 +308,8 @@ describe('generateTfvars', () => {
           'auth-worker': {
             cpu: 256,
             memory: '512',
+            minInstances: 1,
+            maxInstances: 3,
             service: 'auth-service',
             dbPoolMax: 8,
           },

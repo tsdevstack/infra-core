@@ -24,6 +24,7 @@ const baseConfig: AzureInfraConfig = {
   spas: {},
   frontends: {},
   scheduledJobs: {},
+  storageBuckets: [],
   noIndex: false,
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',

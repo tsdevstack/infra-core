@@ -78,12 +78,14 @@ export {
   extractLockId,
   extractImportTargets,
   detectRouteAssociationError,
+  extractCnameConflicts,
 } from './terraform/index.ts';
 export type {
   TerraformCommand,
   TerraformExecuteOptions,
   TerraformResult,
   ImportTarget,
+  CnameConflictTarget,
 } from './terraform/index.ts';
 
 // Provider-specific terraform env builders (aliased to avoid name collisions)
@@ -159,17 +161,6 @@ export type {
   DeleteEcsServiceOptions,
   DeleteEcsServiceResult,
 } from './deploy/aws/ecs/delete-ecs-service.ts';
-// AWS App Runner
-export { createOrUpdateAppRunnerService } from './deploy/aws/apprunner/create-or-update-apprunner-service.ts';
-export type {
-  CreateOrUpdateAppRunnerServiceOptions,
-  CreateOrUpdateAppRunnerServiceResult,
-} from './deploy/aws/apprunner/create-or-update-apprunner-service.ts';
-export { waitForAppRunnerRunning } from './deploy/aws/apprunner/wait-for-apprunner-running.ts';
-export type {
-  WaitForAppRunnerRunningOptions,
-  WaitForAppRunnerRunningResult,
-} from './deploy/aws/apprunner/wait-for-apprunner-running.ts';
 // Azure types
 export type { ContainerAppIdentity } from './deploy/azure/types/index.ts';
 // Azure ACR auth

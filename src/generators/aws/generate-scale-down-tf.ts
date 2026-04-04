@@ -92,6 +92,8 @@ resource "aws_appautoscaling_policy" "scale_to_zero" {
       metric_interval_upper_bound = 0
     }
   }
+
+  depends_on = [aws_appautoscaling_target.service]
 }
 
 # =============================================================================
@@ -116,6 +118,8 @@ resource "aws_appautoscaling_policy" "scale_up" {
     scale_out_cooldown = 60
     disable_scale_in   = true  # Scale-in handled by step-scaling idle alarm (15-min cooldown)
   }
+
+  depends_on = [aws_appautoscaling_target.service]
 }
 `;
 }

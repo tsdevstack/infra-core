@@ -95,6 +95,12 @@ resource "aws_cloudfront_distribution" "spa" {
     response_page_path = "/index.html"
   }
 
+  logging_config {
+    bucket          = aws_s3_bucket.cloudfront_logs.bucket_domain_name
+    prefix          = "spa/\${each.key}/"
+    include_cookies = false
+  }
+
   viewer_certificate {
     acm_certificate_arn      = local.cloudfront_certificate_arn
     ssl_support_method       = "sni-only"

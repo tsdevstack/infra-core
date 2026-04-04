@@ -7,12 +7,18 @@
  */
 
 import { generateWafCustomRules } from './generate-waf-custom-rules.ts';
+import { generateAzureUserWafRules } from './generate-azure-user-waf-rules.ts';
 import type { AzureInfraConfig } from '../../types/config.ts';
 
 export function generateWafTf(config: AzureInfraConfig): string {
   const customRulesHcl = generateWafCustomRules({
     skipManagedBands: config.frontdoorPremium,
+    rateLimit: config.waf?.rateLimit,
   });
+
+  const userRulesHcl = generateAzureUserWafRules(
+    config.waf?.azureCustomRules || [],
+  );
 
   const managedRulesHcl = config.frontdoorPremium
     ? `
@@ -50,7 +56,7 @@ resource "azurerm_cdn_frontdoor_firewall_policy" "main" {
   enabled                           = true
   tags                              = local.tags
 
-${customRulesHcl}${managedRulesHcl}
+${customRulesHcl}${userRulesHcl ? `\n${userRulesHcl}` : ''}${managedRulesHcl}
 }
 `;
 }

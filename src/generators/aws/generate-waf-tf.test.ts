@@ -36,6 +36,12 @@ describe('generateWafTf', () => {
       expect(result).toContain('name     = "AWSManagedRulesCommonRuleSet"');
       expect(result).toContain('priority = 1');
     });
+
+    it('should override SizeRestrictions_BODY to count mode', () => {
+      const result = generateWafTf();
+      expect(result).toContain('name = "SizeRestrictions_BODY"');
+      expect(result).toContain('count {}');
+    });
   });
 
   describe('SQL Injection Rules', () => {
@@ -78,10 +84,18 @@ describe('generateWafTf', () => {
       expect(result).toContain('name     = "RateLimit"');
     });
 
-    it('should limit to 1000 requests per IP', () => {
+    it('should default to 5000 per 5min (1000/60s translated to AWS 300s window)', () => {
       const result = generateWafTf();
-      expect(result).toContain('limit              = 1000');
+      expect(result).toContain('limit              = 5000');
       expect(result).toContain('aggregate_key_type = "IP"');
+    });
+
+    it('should use custom rate limit when provided', () => {
+      const result = generateWafTf({
+        rateLimit: { count: 500, intervalSec: 60 },
+      });
+      // 500/60s * 300s = 2500
+      expect(result).toContain('limit              = 2500');
     });
   });
 
@@ -154,7 +168,7 @@ describe('generateWafTf', () => {
       expect(protoPollutionSection).toContain('or_statement');
       expect(protoPollutionSection).toContain('uri_path {}');
       expect(protoPollutionSection).toContain('query_string {}');
-      expect(protoPollutionSection).toContain('body {}');
+      expect(protoPollutionSection).toContain('oversize_handling = "CONTINUE"');
     });
   });
 
@@ -183,7 +197,7 @@ describe('generateWafTf', () => {
       expect(codeInjectionSection).toContain('or_statement');
       expect(codeInjectionSection).toContain('uri_path {}');
       expect(codeInjectionSection).toContain('query_string {}');
-      expect(codeInjectionSection).toContain('body {}');
+      expect(codeInjectionSection).toContain('oversize_handling = "CONTINUE"');
     });
   });
 

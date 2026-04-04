@@ -24,6 +24,7 @@ const baseConfig: AzureInfraConfig = {
   spas: {},
   frontends: {},
   scheduledJobs: {},
+  storageBuckets: [],
   noIndex: false,
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',
@@ -31,6 +32,39 @@ const baseConfig: AzureInfraConfig = {
 };
 
 describe('generateDiagnosticsTf', () => {
+  describe('Front Door diagnostics', () => {
+    it('should create Front Door diagnostic setting', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      expect(result).toContain(
+        'resource "azurerm_monitor_diagnostic_setting" "frontdoor"',
+      );
+    });
+
+    it('should target the Front Door profile', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      expect(result).toContain(
+        'target_resource_id         = azurerm_cdn_frontdoor_profile.main.id',
+      );
+    });
+
+    it('should enable FrontDoorAccessLog', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      expect(result).toContain('category = "FrontDoorAccessLog"');
+    });
+
+    it('should enable FrontDoorHealthProbeLog', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      expect(result).toContain('category = "FrontDoorHealthProbeLog"');
+    });
+
+    it('should enable FrontDoorWebApplicationFirewallLog', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      expect(result).toContain(
+        'category = "FrontDoorWebApplicationFirewallLog"',
+      );
+    });
+  });
+
   describe('PostgreSQL diagnostics', () => {
     it('should create PostgreSQL diagnostic setting', () => {
       const result = generateDiagnosticsTf(baseConfig);

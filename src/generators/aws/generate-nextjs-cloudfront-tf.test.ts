@@ -49,7 +49,7 @@ describe('generateNextjsCloudfrontTf', () => {
     it('should forward CORS headers', () => {
       const result = generateNextjsCloudfrontTf();
       expect(result).toContain(
-        'items = ["Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]',
+        'items = ["Host", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]',
       );
     });
   });
@@ -60,7 +60,7 @@ describe('generateNextjsCloudfrontTf', () => {
       expect(result).toContain(
         'resource "aws_cloudfront_distribution" "nextjs"',
       );
-      expect(result).toContain('for_each = var.nextjs_origins');
+      expect(result).toContain('for_each = var.nextjs_services');
     });
 
     it('should attach WAF Web ACL', () => {
@@ -68,10 +68,15 @@ describe('generateNextjsCloudfrontTf', () => {
       expect(result).toContain('web_acl_id      = aws_wafv2_web_acl.main.arn');
     });
 
-    it('should use App Runner as origin', () => {
+    it('should use ALB as origin', () => {
       const result = generateNextjsCloudfrontTf();
-      expect(result).toContain('origin_id   = "apprunner"');
-      expect(result).toContain('domain_name = each.value');
+      expect(result).toContain('origin_id   = "alb"');
+      expect(result).toContain('domain_name = aws_lb.main.dns_name');
+    });
+
+    it('should forward Host header via origin request policy for ALB routing', () => {
+      const result = generateNextjsCloudfrontTf();
+      expect(result).toContain('items = ["Host", "Origin"');
     });
 
     it('should use HTTPS only for origin', () => {
@@ -84,7 +89,7 @@ describe('generateNextjsCloudfrontTf', () => {
     it('should have default behavior for dynamic content', () => {
       const result = generateNextjsCloudfrontTf();
       expect(result).toContain('default_cache_behavior {');
-      expect(result).toContain('target_origin_id       = "apprunner"');
+      expect(result).toContain('target_origin_id       = "alb"');
     });
 
     it('should allow all HTTP methods', () => {

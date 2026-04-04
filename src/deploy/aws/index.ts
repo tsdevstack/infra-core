@@ -39,15 +39,3 @@ export type {
   DeleteEcsServiceOptions,
   DeleteEcsServiceResult,
 } from './ecs/delete-ecs-service.ts';
-
-// App Runner (Session 3)
-export { createOrUpdateAppRunnerService } from './apprunner/create-or-update-apprunner-service.ts';
-export type {
-  CreateOrUpdateAppRunnerServiceOptions,
-  CreateOrUpdateAppRunnerServiceResult,
-} from './apprunner/create-or-update-apprunner-service.ts';
-export { waitForAppRunnerRunning } from './apprunner/wait-for-apprunner-running.ts';
-export type {
-  WaitForAppRunnerRunningOptions,
-  WaitForAppRunnerRunningResult,
-} from './apprunner/wait-for-apprunner-running.ts';
