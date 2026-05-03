@@ -25,7 +25,7 @@ export function generateDbDelete(): DbDeleteFiles {
 }
 
 function generateDockerfile(): string {
-  return `FROM node:20-alpine
+  return `FROM node:22-alpine
 WORKDIR /app
 COPY package.json ./
 RUN npm install --production

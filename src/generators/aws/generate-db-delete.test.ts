@@ -18,7 +18,7 @@ describe('generateDbDelete', () => {
     it('should generate valid Dockerfile', () => {
       const result = generateDbDelete();
 
-      expect(result.dockerfile).toContain('FROM node:20-alpine');
+      expect(result.dockerfile).toContain('FROM node:22-alpine');
       expect(result.dockerfile).toContain('WORKDIR /app');
       expect(result.dockerfile).toContain('COPY package.json');
       expect(result.dockerfile).toContain('npm install --production');

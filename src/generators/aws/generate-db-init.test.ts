@@ -12,9 +12,9 @@ describe('generateDbInit', () => {
   });
 
   describe('dockerfile', () => {
-    it('should use Node.js 20 alpine', () => {
+    it('should use Node.js 22 alpine', () => {
       const { dockerfile } = generateDbInit();
-      expect(dockerfile).toContain('FROM node:20-alpine');
+      expect(dockerfile).toContain('FROM node:22-alpine');
     });
 
     it('should set WORKDIR to /app', () => {
