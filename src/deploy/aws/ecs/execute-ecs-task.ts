@@ -233,7 +233,7 @@ export async function executeEcsTask(
 
   // Fetch logs
   runtime.logger.info('Fetching task logs...');
-  let logs = '';
+  let logs: string;
 
   try {
     // Log stream name format: {prefix}/{container-name}/{task-id}
