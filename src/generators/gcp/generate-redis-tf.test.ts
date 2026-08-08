@@ -62,6 +62,14 @@ describe('generateRedisTf', () => {
     });
   });
 
+  describe('eviction policy', () => {
+    it('should set noeviction policy for BullMQ compatibility', () => {
+      const result = generateRedisTf();
+      expect(result).toContain('redis_configs = {');
+      expect(result).toContain('"maxmemory-policy" = "noeviction"');
+    });
+  });
+
   describe('maintenance policy', () => {
     it('should configure maintenance window', () => {
       const result = generateRedisTf();

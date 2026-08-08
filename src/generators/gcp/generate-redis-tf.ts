@@ -24,6 +24,13 @@ resource "google_redis_instance" "redis" {
   # Enable AUTH - GCP generates the password automatically
   auth_enabled = true
 
+  # noeviction is required for BullMQ job queues (matches AWS/Azure).
+  # Memorystore defaults to volatile-lru, which would silently evict
+  # TTL-bearing keys under memory pressure instead of failing loudly.
+  redis_configs = {
+    "maxmemory-policy" = "noeviction"
+  }
+
   # Maintenance window
   maintenance_policy {
     weekly_maintenance_window {
