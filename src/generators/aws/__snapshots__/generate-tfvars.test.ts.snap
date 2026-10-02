@@ -63,7 +63,7 @@ spa_services = {
   }
 }
 
-# Next.js Services (App Runner + CloudFront)
+# Next.js Services (ECS Fargate + CloudFront)
 nextjs_services = {
   "admin-portal" = {
     domain       = "admin.example.com"
@@ -118,7 +118,7 @@ all_deployables = {}
 # SPA Services
 spa_services = {}
 
-# Next.js Services (App Runner + CloudFront)
+# Next.js Services (ECS Fargate + CloudFront)
 nextjs_services = {}
 
 # Scheduled Jobs

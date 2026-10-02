@@ -5,8 +5,7 @@
  * - S3 bucket for ALB access logs (with ELB service principal policy)
  * - S3 bucket for CloudFront standard logs (with ACL for log delivery)
  * - CloudWatch Log Group for WAF (CloudFront scope)
- * - CloudWatch Log Group for WAF (App Runner scope)
- * - WAF logging configurations for both Web ACLs
+ * - WAF logging configuration for the CloudFront Web ACL
  *
  * All CloudFront distributions share one S3 logging bucket with prefixes.
  * WAF logs go to CloudWatch for queryable real-time access.

@@ -3,15 +3,12 @@ import { generateJobInvokerLambdaCode } from './generate-job-invoker-lambda-code
 
 describe('generateJobInvokerLambdaCode', () => {
   describe('imports', () => {
-    it('should import ECS client', () => {
+    it('should not import the ECS client (no wake-up step)', () => {
       const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('ECSClient');
-    });
-
-    it('should import ECS commands', () => {
-      const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('UpdateServiceCommand');
-      expect(result).toContain('DescribeServicesCommand');
+      expect(result).not.toContain('@aws-sdk/client-ecs');
+      expect(result).not.toContain('ECSClient');
+      expect(result).not.toContain('UpdateServiceCommand');
+      expect(result).not.toContain('DescribeServicesCommand');
     });
 
     it('should import Secrets Manager client', () => {
@@ -22,14 +19,10 @@ describe('generateJobInvokerLambdaCode', () => {
   });
 
   describe('environment variables', () => {
-    it('should read ECS_CLUSTER from environment', () => {
+    it('should not read ECS_CLUSTER or SERVICE_NAMES', () => {
       const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('const CLUSTER = process.env.ECS_CLUSTER;');
-    });
-
-    it('should read SERVICE_NAMES from environment', () => {
-      const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('const SERVICES = process.env.SERVICE_NAMES');
+      expect(result).not.toContain('ECS_CLUSTER');
+      expect(result).not.toContain('SERVICE_NAMES');
     });
 
     it('should read CLOUDMAP_NAMESPACE from environment', () => {
@@ -60,20 +53,12 @@ describe('generateJobInvokerLambdaCode', () => {
     });
   });
 
-  describe('service wake-up', () => {
-    it('should call ensureServicesRunning', () => {
+  describe('no service wake-up (AWS has no scale-to-zero)', () => {
+    it('should not wake or scale services before invoking', () => {
       const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('await ensureServicesRunning()');
-    });
-
-    it('should scale services to 1', () => {
-      const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('desiredCount: 1');
-    });
-
-    it('should wait for services to become healthy', () => {
-      const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('const maxWait = 90000');
+      expect(result).not.toContain('ensureServicesRunning');
+      expect(result).not.toContain('desiredCount');
+      expect(result).not.toContain('maxWait');
     });
   });
 

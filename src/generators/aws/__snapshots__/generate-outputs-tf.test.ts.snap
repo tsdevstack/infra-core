@@ -47,21 +47,6 @@ output "ecs_cluster_name" {
 }
 
 # =============================================================================
-# Wake-up Lambda
-# =============================================================================
-
-output "wakeup_lambda_url" {
-  description = "Lambda Function URL for wake-up (used by Kong post-function plugin)"
-  value       = aws_lambda_function_url.wakeup.function_url
-}
-
-output "wakeup_secret" {
-  description = "Secret for X-Wake-Secret header validation (used by Kong post-function plugin)"
-  value       = random_password.wakeup_secret.result
-  sensitive   = true
-}
-
-# =============================================================================
 # Redis (ElastiCache)
 # =============================================================================
 
@@ -158,15 +143,6 @@ output "ecs_task_role_arns" {
 output "api_url" {
   description = "API URL (custom domain if set, otherwise ALB DNS)"
   value       = var.base_domain != "" ? "https://\${local.api_domain}" : "https://\${aws_lb.main.dns_name}"
-}
-
-# =============================================================================
-# ALB Internal DNS (for Kong upstream failover)
-# =============================================================================
-
-output "alb_internal_dns" {
-  description = "ALB DNS name for Kong internal routing (used in Kong upstreams)"
-  value       = aws_lb.main.dns_name
 }
 
 # =============================================================================
@@ -245,21 +221,6 @@ output "ecs_cluster_name" {
 }
 
 # =============================================================================
-# Wake-up Lambda
-# =============================================================================
-
-output "wakeup_lambda_url" {
-  description = "Lambda Function URL for wake-up (used by Kong post-function plugin)"
-  value       = aws_lambda_function_url.wakeup.function_url
-}
-
-output "wakeup_secret" {
-  description = "Secret for X-Wake-Secret header validation (used by Kong post-function plugin)"
-  value       = random_password.wakeup_secret.result
-  sensitive   = true
-}
-
-# =============================================================================
 # Redis (ElastiCache)
 # =============================================================================
 
@@ -356,15 +317,6 @@ output "ecs_task_role_arns" {
 output "api_url" {
   description = "API URL (custom domain if set, otherwise ALB DNS)"
   value       = var.base_domain != "" ? "https://\${local.api_domain}" : "https://\${aws_lb.main.dns_name}"
-}
-
-# =============================================================================
-# ALB Internal DNS (for Kong upstream failover)
-# =============================================================================
-
-output "alb_internal_dns" {
-  description = "ALB DNS name for Kong internal routing (used in Kong upstreams)"
-  value       = aws_lb.main.dns_name
 }
 
 # =============================================================================

@@ -1,5 +1,6 @@
 import { describe, it, expect, rs, beforeEach } from '@rstest/core';
 import type { InfraCoreRuntime } from '../../types/runtime.ts';
+import { InfraCoreError } from '../../runtime/infra-core-error.ts';
 
 // Mock global fetch
 const mockFetch = rs.fn();
@@ -114,6 +115,25 @@ describe('waitForImage', () => {
           delayMs: 10,
         }),
       ).rejects.toThrow('Image not found after 3 attempts');
+    });
+
+    it('should point at the git-commit tag default and --tag in the hint', async () => {
+      mockFetch.mockResolvedValue({ ok: false });
+
+      const error = await waitForImage(mockRuntime, {
+        imageUri: 'us-central1-docker.pkg.dev/project/repo/image:tag',
+        credentials: {
+          project_id: 'test-project',
+          region: 'us-central1',
+          client_email: 'test@test.iam.gserviceaccount.com',
+        },
+        maxAttempts: 1,
+        delayMs: 10,
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(InfraCoreError);
+      expect((error as InfraCoreError).hint).toContain('current git commit');
+      expect((error as InfraCoreError).hint).toContain('--tag');
     });
   });
 

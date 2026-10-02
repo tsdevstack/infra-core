@@ -30,6 +30,11 @@ export interface DatabaseConfig {
   backup: boolean;
   /** High availability — GCP only */
   ha?: boolean;
+  /**
+   * PostgreSQL Flexible Server name override — Azure only.
+   * When absent, the generator uses {project_name}-{environment}-postgres.
+   */
+  serverName?: string;
 }
 
 /**
@@ -77,7 +82,7 @@ export interface ServiceConfig {
 }
 
 /**
- * Frontend service configuration (App Service / App Runner / Cloud Run)
+ * Frontend service configuration (App Service / ECS / Cloud Run)
  *
  * For Next.js and other SSR frontends deployed as containers.
  */

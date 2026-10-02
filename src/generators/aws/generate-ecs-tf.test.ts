@@ -131,10 +131,44 @@ describe('generateEcsTf', () => {
       expect(result).toContain('launch_type     = "FARGATE"');
     });
 
-    it('should configure load balancer integration', () => {
+    it('should register only Kong with the ALB (backends are VPC-only)', () => {
       const result = generateEcsTf();
-      expect(result).toContain('load_balancer {');
-      expect(result).toContain('container_port   = 8080');
+      const serviceStart = result.indexOf(
+        'resource "aws_ecs_service" "service"',
+      );
+      const serviceEnd = result.indexOf('resource "', serviceStart + 1);
+      const serviceSection = result.substring(serviceStart, serviceEnd);
+      expect(serviceSection).toContain('dynamic "load_balancer"');
+      expect(serviceSection).toContain(
+        'for_each = each.key == "kong" ? [1] : []',
+      );
+      expect(serviceSection).toContain('container_port   = 8080');
+      // No static load_balancer block for every service
+      expect(serviceSection).not.toMatch(/^ {2}load_balancer \{/m);
+    });
+
+    it('should set the ALB health check grace period only for Kong', () => {
+      const result = generateEcsTf();
+      expect(result).toContain(
+        'health_check_grace_period_seconds = each.key == "kong" ? 120 : null',
+      );
+    });
+
+    it('should keep the Next.js load balancer integration', () => {
+      const result = generateEcsTf();
+      const nextjsStart = result.indexOf('resource "aws_ecs_service" "nextjs"');
+      const nextjsSection = result.substring(nextjsStart);
+      expect(nextjsSection).toContain('load_balancer {');
+      expect(nextjsSection).toContain(
+        'target_group_arn = aws_lb_target_group.nextjs[each.key].arn',
+      );
+    });
+
+    it('should run at least one task per service', () => {
+      const result = generateEcsTf();
+      expect(result).toContain(
+        'desired_count   = max(each.value.minInstances, 1)',
+      );
     });
 
     it('should enable zero-downtime deployment', () => {
@@ -164,6 +198,108 @@ describe('generateEcsTf', () => {
       expect(result).toContain(
         'aws_service_discovery_service.service[each.key].arn',
       );
+    });
+  });
+
+  describe('service auto scaling (NestJS services and Kong)', () => {
+    const section = (result: string, header: string): string => {
+      const start = result.indexOf(header);
+      const end = result.indexOf('\n}\n', start);
+      return result.substring(start, end + 2);
+    };
+
+    it('should create a scalable target for every service between min and max', () => {
+      const target = section(
+        generateEcsTf(),
+        'resource "aws_appautoscaling_target" "service"',
+      );
+      expect(target).toContain('for_each = var.services');
+      expect(target).toContain('max_capacity       = each.value.maxInstances');
+      expect(target).toContain('min_capacity       = each.value.minInstances');
+      expect(target).toContain(
+        'resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.service[each.key].name}"',
+      );
+      expect(target).toContain(
+        'scalable_dimension = "ecs:service:DesiredCount"',
+      );
+    });
+
+    it('should use the same CPU target tracking policy as workers and Next.js', () => {
+      const result = generateEcsTf();
+      const normalize = (policy: string): string =>
+        policy
+          .split('\n')
+          .filter(
+            (line) =>
+              !line.includes('resource "') && !line.includes('for_each'),
+          )
+          .join('\n')
+          .replace(/\.(service|worker|nextjs)\[/g, '.X[')
+          .replace(
+            /aws_appautoscaling_target\.(service|worker|nextjs)\]/g,
+            'aws_appautoscaling_target.X]',
+          );
+      const servicePolicy = section(
+        result,
+        'resource "aws_appautoscaling_policy" "service_cpu"',
+      );
+      const workerPolicy = section(
+        result,
+        'resource "aws_appautoscaling_policy" "worker_cpu"',
+      );
+      const nextjsPolicy = section(
+        result,
+        'resource "aws_appautoscaling_policy" "nextjs_cpu"',
+      );
+      expect(servicePolicy).toContain('for_each = var.services');
+      expect(servicePolicy).toContain(
+        'predefined_metric_type = "ECSServiceAverageCPUUtilization"',
+      );
+      expect(servicePolicy).toContain('target_value       = 70.0');
+      expect(servicePolicy).toContain('scale_out_cooldown = 60');
+      expect(servicePolicy).toContain('scale_in_cooldown  = 300');
+      expect(normalize(servicePolicy)).toBe(normalize(workerPolicy));
+      expect(normalize(servicePolicy)).toBe(normalize(nextjsPolicy));
+    });
+
+    it('should not generate scale-to-zero resources', () => {
+      const result = generateEcsTf();
+      expect(result).not.toContain('aws_cloudwatch_metric_alarm');
+      expect(result).not.toContain('scale_to_zero');
+      expect(result).not.toContain('StepScaling');
+      expect(result).not.toContain('min_capacity       = 0');
+    });
+  });
+
+  describe('Kong task environment', () => {
+    it('should keep KONG_DNS_RESOLVER for Cloud Map names', () => {
+      const result = generateEcsTf();
+      expect(result).toContain(
+        '{ name = "KONG_DNS_RESOLVER", value = "10.0.0.2" }',
+      );
+    });
+
+    it('should keep KONG_PROXY_LISTEN on 8080', () => {
+      const result = generateEcsTf();
+      expect(result).toContain(
+        '{ name = "KONG_PROXY_LISTEN", value = "0.0.0.0:8080" }',
+      );
+    });
+
+    it('should not include wake-up or Lua sandbox settings', () => {
+      const result = generateEcsTf();
+      expect(result).not.toContain('WAKEUP_LAMBDA_URL');
+      expect(result).not.toContain('aws_lambda_function_url.wakeup');
+      expect(result).not.toContain('KONG_UNTRUSTED_LUA_SANDBOX');
+    });
+
+    it('should use the Kong readiness script with standard health check timings', () => {
+      const result = generateEcsTf();
+      expect(result).toContain('"/usr/local/bin/kong-health-check.sh"');
+      expect(result).toContain('timeout     = 5\n');
+      expect(result).toContain('startPeriod = 60\n');
+      expect(result).not.toMatch(/timeout\s+= each\.key == "kong"/);
+      expect(result).not.toMatch(/startPeriod = each\.key == "kong"/);
     });
   });
 

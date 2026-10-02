@@ -13,11 +13,18 @@ resource "random_password" "job_auth" {
   special = false
 }
 
+# Named like every shared secret ({project}-shared-{KEY}): SchedulerGuard reads
+# JOB_AUTH_SECRET through the secrets provider, and the services' task roles may
+# read {project}-shared-*. The Lambda reads it by ARN.
 resource "aws_secretsmanager_secret" "job_auth" {
-  name        = "\${var.project_name}-job-auth-secret"
+  name        = "\${var.project_name}-shared-JOB_AUTH_SECRET"
   description = "Secret for authenticating scheduled job invocations"
 
-  tags = { Name = "\${var.project_name}-job-auth" }
+  tags = {
+    Name           = "\${var.project_name}-job-auth"
+    "project-name" = var.project_name
+    "managed-by"   = "tsdevstack"
+  }
 }
 
 resource "aws_secretsmanager_secret_version" "job_auth" {
@@ -69,8 +76,6 @@ resource "aws_lambda_function" "job_invoker" {
 
   environment {
     variables = {
-      ECS_CLUSTER        = aws_ecs_cluster.main.name
-      SERVICE_NAMES      = join(",", keys(var.services))
       CLOUDMAP_NAMESPACE = "\${var.project_name}.local"
       JOB_SECRET_ARN     = aws_secretsmanager_secret.job_auth.arn
     }
@@ -105,14 +110,6 @@ resource "aws_iam_role_policy" "job_invoker_lambda" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ecs:UpdateService",
-          "ecs:DescribeServices"
-        ]
-        Resource = "*"
-      },
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]

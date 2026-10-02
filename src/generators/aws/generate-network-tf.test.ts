@@ -115,16 +115,38 @@ describe('generateNetworkTf', () => {
       expect(result).toContain('HTTP redirect to HTTPS');
     });
 
-    it('should allow internal HTTPS (8443) for Kong upstream routing', () => {
+    it('should only open 443 and 80 on the ALB security group', () => {
       const result = generateNetworkTf();
-      expect(result).toContain('from_port   = 8443');
-      expect(result).toContain('to_port     = 8443');
+      const albStart = result.indexOf('resource "aws_security_group" "alb"');
+      const albEnd = result.indexOf(
+        'resource "aws_security_group" "ecs"',
+        albStart,
+      );
+      const albSection = result.substring(albStart, albEnd);
+      const ingressPorts = [
+        ...albSection.matchAll(/from_port {3}= (\d+)/g),
+      ].map((m) => m[1]);
+      expect(ingressPorts).toEqual(['443', '80', '0']); // 0 = egress
+      expect(albSection).not.toContain('8443');
+      expect(albSection).not.toContain('8080');
     });
 
-    it('should allow internal HTTP (8080) for Kong OIDC discovery', () => {
+    it('should not open 8443 anywhere', () => {
       const result = generateNetworkTf();
-      expect(result).toContain('from_port   = 8080');
-      expect(result).toContain('to_port     = 8080');
+      expect(result).not.toContain('8443');
+    });
+
+    it('should allow ECS self traffic on 8080 (Kong to services via Cloud Map)', () => {
+      const result = generateNetworkTf();
+      const ecsStart = result.indexOf('resource "aws_security_group" "ecs"');
+      const ecsEnd = result.indexOf(
+        'resource "aws_security_group" "rds"',
+        ecsStart,
+      );
+      const ecsSection = result.substring(ecsStart, ecsEnd);
+      expect(ecsSection).toMatch(
+        /from_port {3}= 8080\s+to_port {5}= 8080\s+protocol {4}= "tcp"\s+self {8}= true/,
+      );
     });
 
     it('should create ECS security group', () => {

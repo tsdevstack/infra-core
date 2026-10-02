@@ -99,6 +99,31 @@ describe('generateScheduledJobsTf', () => {
     expect(result).toContain('data.azurerm_key_vault.main.id');
   });
 
+  it('should tag the job secret like CLI-written secrets (project-name for cloud-secrets:list)', () => {
+    const config: AzureInfraConfig = {
+      ...baseConfig,
+      scheduledJobs: {
+        'daily-cleanup': {
+          name: 'daily-cleanup',
+          schedule: '0 2 * * *',
+          targetService: 'auth-service',
+          endpoint: '/auth/jobs/cleanup',
+          method: 'POST',
+        },
+      },
+    };
+
+    const result = generateScheduledJobsTf(config);
+    const secretBlock = result.slice(
+      result.indexOf('resource "azurerm_key_vault_secret" "job_secret"'),
+      result.indexOf('resource "azurerm_container_app_job"'),
+    );
+
+    expect(secretBlock).toContain('"project-name" = var.project_name');
+    expect(secretBlock).toContain('"service-name" = "shared"');
+    expect(secretBlock).toContain('"managed-by"   = "tsdevstack"');
+  });
+
   it('should use local.tags not local.common_tags', () => {
     const config: AzureInfraConfig = {
       ...baseConfig,

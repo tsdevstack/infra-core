@@ -3,22 +3,19 @@
  *
  * Creates:
  * - Application Load Balancer (public subnets)
- * - Target Groups for ALL services (Kong + backend services + Next.js)
+ * - Target Group for Kong (the only backend-tier service behind the ALB)
+ * - Target Groups for Next.js services
  * - HTTPS Listener (port 443, default: 403, external traffic)
  * - HTTP Listener (port 80, redirects to HTTPS)
- * - Internal HTTPS Listener (port 8443, for Kong upstream routing)
- * - Internal HTTP Listener (port 8080, for Kong OIDC discovery)
- * - Host-based routing rules (Host: {service}.internal → service target group)
- * - OIDC discovery path-based rule (/auth/.well-known/* → auth-service)
  *
  * External traffic (port 443) is routed by host:
  *   - Next.js domains → Next.js target groups (host-based rules, priority 10+)
  *   - All other traffic → Kong target group (catch-all, priority 100)
- * Kong routes to services via internal HTTPS listener (port 8443) using Host headers.
- * Kong OIDC discovery uses internal HTTP listener (port 8080) so auth-service
- * returns jwks_uri with http://127.0.0.1:8080 that Kong can reach via its own proxy.
+ * Both require the X-Origin-Verify header that only CloudFront sends.
  *
- * See: docs/in-dev/phase-21-aws-architecture.md (Phase 21.11a, 21.11c)
+ * Backend services are not registered with the ALB. Kong reaches them inside
+ * the VPC through Cloud Map ({service}.{project}.local:8080), so they have no
+ * public entry point.
  */
 
 export function generateAlbTf(): string {
@@ -59,12 +56,13 @@ resource "aws_lb" "main" {
 }
 
 # =============================================================================
-# Target Groups (ALL services)
-# Kong + all backend services need target groups for internal routing
+# Target Group (Kong)
+# Only Kong sits behind the ALB. Backend services are reached via Cloud Map.
+# The for_each filter keeps the resource address aws_lb_target_group.service["kong"].
 # =============================================================================
 
 resource "aws_lb_target_group" "service" {
-  for_each = var.services
+  for_each = { for name, cfg in var.services : name => cfg if name == "kong" }
 
   name        = "\${var.project_name}-\${each.key}"
   port        = 8080
@@ -205,113 +203,6 @@ resource "aws_lb_listener_rule" "origin_verify" {
   }
 
   tags = { Name = "\${var.project_name}-origin-verify-rule" }
-}
-
-# =============================================================================
-# Internal HTTPS Listener (Kong upstream routing)
-# Port 8443 for Kong to route to backend services via Host header.
-# HTTPS required so Kong can use same scheme for ALB and Lambda (443) targets.
-# ALB always has DNS even at 0 tasks - returns 502/503, triggering Kong failover.
-# =============================================================================
-
-resource "aws_lb_listener" "internal" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = 8443
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = local.regional_certificate_arn
-
-  # Default action: return 404 (should never hit - all requests have Host header)
-  default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "application/json"
-      message_body = "{\\"error\\":\\"Invalid internal routing\\"}"
-      status_code  = "404"
-    }
-  }
-
-  tags = { Name = "\${var.project_name}-internal-listener" }
-}
-
-# =============================================================================
-# Internal HTTP Listener (Kong OIDC discovery)
-# Port 8080 HTTP for OIDC discovery ONLY.
-# HTTP (not HTTPS) ensures ALB sets X-Forwarded-Proto: http, X-Forwarded-Port: 8080
-# Auth-service uses these headers to construct jwks_uri that Kong can reach
-# via its own proxy port (127.0.0.1:8080).
-# See: docs/in-dev/phase-21-aws-service-discovery-fix.md (Phase 21.11c)
-# =============================================================================
-
-resource "aws_lb_listener" "internal_http" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = 8080
-  protocol          = "HTTP"
-
-  # Default action: return 404 (only OIDC discovery paths should hit this listener)
-  default_action {
-    type = "fixed-response"
-    fixed_response {
-      content_type = "application/json"
-      message_body = "{\\"error\\":\\"Invalid internal HTTP routing\\"}"
-      status_code  = "404"
-    }
-  }
-
-  tags = { Name = "\${var.project_name}-internal-http-listener" }
-}
-
-# =============================================================================
-# OIDC Discovery Path-Based Rule for HTTP listener (priority 50)
-# Routes /auth/.well-known/* to auth-service.
-# Kong OIDC plugin calls with Host: 127.0.0.1:8080, ALB preserves this.
-# ALB sets X-Forwarded-Proto: http, X-Forwarded-Port: 8080
-# Auth-service returns jwks_uri: http://127.0.0.1:8080/... which Kong can reach.
-# =============================================================================
-
-resource "aws_lb_listener_rule" "oidc_discovery_http" {
-  listener_arn = aws_lb_listener.internal_http.arn
-  priority     = 50
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.service["auth-service"].arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/auth/.well-known/*"]
-    }
-  }
-
-  tags = { Name = "\${var.project_name}-oidc-discovery-http-rule" }
-}
-
-# =============================================================================
-# Host-Based Routing Rules (Kong upstream failover)
-# Kong sends Host: {service}.internal header, ALB routes to service target group.
-# When service has 0 healthy targets, ALB returns 502 → Kong failover to Lambda.
-# =============================================================================
-
-resource "aws_lb_listener_rule" "internal_host" {
-  # Create rules for all services EXCEPT kong
-  for_each = { for name, cfg in var.services : name => cfg if name != "kong" }
-
-  listener_arn = aws_lb_listener.internal.arn
-  priority     = 100 + index(keys({ for n, c in var.services : n => c if n != "kong" }), each.key)
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.service[each.key].arn
-  }
-
-  condition {
-    host_header {
-      values = ["\${each.key}.internal"]
-    }
-  }
-
-  tags = { Name = "\${var.project_name}-\${each.key}-internal-rule" }
 }
 
 # =============================================================================

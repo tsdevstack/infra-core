@@ -18,3 +18,8 @@ export {
   AZURE_DATABASE_CONNECTION_LIMITS,
   DEFAULT_AZURE_DATABASE_TIER,
 } from './azure-database-tiers.ts';
+
+export {
+  ECS_MIGRATION_CONTAINER_NAME,
+  ECS_TASK_EXIT_CODE_GRACE_POLLS,
+} from './aws-ecs-task.ts';

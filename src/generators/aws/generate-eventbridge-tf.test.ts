@@ -20,6 +20,16 @@ describe('generateEventbridgeTf', () => {
       );
     });
 
+    it('should name the job secret like a shared secret so SchedulerGuard and the task roles find it', () => {
+      const result = generateEventbridgeTf();
+      expect(result).toContain(
+        'name        = "${var.project_name}-shared-JOB_AUTH_SECRET"',
+      );
+      expect(result).not.toContain('-job-auth-secret');
+      expect(result).toContain('"project-name" = var.project_name');
+      expect(result).toContain('"managed-by"   = "tsdevstack"');
+    });
+
     it('should create secret version', () => {
       const result = generateEventbridgeTf();
       expect(result).toContain(
@@ -53,12 +63,6 @@ describe('generateEventbridgeTf', () => {
     it('should pass environment variables', () => {
       const result = generateEventbridgeTf();
       expect(result).toContain(
-        'ECS_CLUSTER        = aws_ecs_cluster.main.name',
-      );
-      expect(result).toContain(
-        'SERVICE_NAMES      = join(",", keys(var.services))',
-      );
-      expect(result).toContain(
         'CLOUDMAP_NAMESPACE = "${var.project_name}.local"',
       );
       expect(result).toContain(
@@ -78,10 +82,16 @@ describe('generateEventbridgeTf', () => {
       expect(result).toContain('Service = "lambda.amazonaws.com"');
     });
 
-    it('should allow ECS permissions', () => {
+    it('should not grant ECS permissions (no wake-up step)', () => {
       const result = generateEventbridgeTf();
-      expect(result).toContain('"ecs:UpdateService"');
-      expect(result).toContain('"ecs:DescribeServices"');
+      expect(result).not.toContain('"ecs:UpdateService"');
+      expect(result).not.toContain('"ecs:DescribeServices"');
+    });
+
+    it('should not pass wake-up environment variables', () => {
+      const result = generateEventbridgeTf();
+      expect(result).not.toContain('ECS_CLUSTER');
+      expect(result).not.toContain('SERVICE_NAMES');
     });
 
     it('should allow Secrets Manager access', () => {

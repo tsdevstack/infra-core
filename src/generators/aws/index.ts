@@ -26,15 +26,12 @@ export {
   type ResponseHeadersPolicyConfig,
 } from './generate-response-headers-policy-tf.ts';
 export { generateCloudfrontTf } from './generate-cloudfront-tf.ts';
-export { generateWakeupLambdaTf } from './generate-wakeup-lambda-tf.ts';
 export { generateAcmTf } from './generate-acm-tf.ts';
 export { generateRoute53Tf } from './generate-route53-tf.ts';
 export { generateS3SpaTf } from './generate-s3-spa-tf.ts';
 export { generateEventbridgeTf } from './generate-eventbridge-tf.ts';
-export { generateScaleDownTf } from './generate-scale-down-tf.ts';
 export { generateNextjsCloudfrontTf } from './generate-nextjs-cloudfront-tf.ts';
 export { generateRedirectTf } from './generate-redirect-tf.ts';
-export { generateWakeupLambdaCode } from './generate-wakeup-lambda-code.ts';
 export { generateJobInvokerLambdaCode } from './generate-job-invoker-lambda-code.ts';
 export { generateDbInitTf } from './generate-db-init-tf.ts';
 export { generateDbInit, type DbInitFiles } from './generate-db-init.ts';

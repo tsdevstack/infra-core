@@ -140,29 +140,16 @@ describe('generateOutputsTf', () => {
       expect(result).toContain('output "api_url"');
     });
 
-    it('should output alb_internal_dns for Kong routing', () => {
+    it('should not output an internal ALB DNS name (Kong uses Cloud Map)', () => {
       const result = generateOutputsTf();
-      expect(result).toContain('output "alb_internal_dns"');
-      expect(result).toContain('aws_lb.main.dns_name');
+      expect(result).not.toContain('alb_internal_dns');
     });
 
-    it('should output wakeup_lambda_url', () => {
+    it('should not output wake-up Lambda values (AWS has no scale-to-zero)', () => {
       const result = generateOutputsTf();
-      expect(result).toContain('output "wakeup_lambda_url"');
-      expect(result).toContain('aws_lambda_function_url.wakeup.function_url');
-    });
-
-    it('should output wakeup_secret as sensitive', () => {
-      const result = generateOutputsTf();
-      expect(result).toContain('output "wakeup_secret"');
-      expect(result).toContain('random_password.wakeup_secret.result');
-      // Check it's marked as sensitive (after the wakeup_secret output)
-      const secretOutputStart = result.indexOf('output "wakeup_secret"');
-      const secretOutputSection = result.substring(
-        secretOutputStart,
-        result.indexOf('}', secretOutputStart) + 1,
-      );
-      expect(secretOutputSection).toContain('sensitive   = true');
+      expect(result).not.toContain('wakeup_lambda_url');
+      expect(result).not.toContain('wakeup_secret');
+      expect(result).not.toContain('aws_lambda_function_url.wakeup');
     });
 
     it('should output cloudmap_namespace for service discovery', () => {

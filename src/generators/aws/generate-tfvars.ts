@@ -61,7 +61,7 @@ all_deployables = ${allDeployablesHcl}
 # SPA Services
 spa_services = ${spaServicesHcl}
 
-# Next.js Services (App Runner + CloudFront)
+# Next.js Services (ECS Fargate + CloudFront)
 nextjs_services = ${nextjsServicesHcl}
 
 # Scheduled Jobs

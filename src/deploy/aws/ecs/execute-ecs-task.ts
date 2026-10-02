@@ -22,6 +22,11 @@ import type { InfraCoreRuntime } from '../../../types/runtime.ts';
 import type { AWSCredentials } from '../../../types/credentials.ts';
 import { InfraCoreError } from '../../../runtime/infra-core-error.ts';
 import { sleep } from '../../../utils/async/sleep.ts';
+import {
+  ECS_MIGRATION_CONTAINER_NAME,
+  ECS_TASK_EXIT_CODE_GRACE_POLLS,
+} from '../../../constants/aws-ecs-task.ts';
+import { readEcsTaskOutcome } from './read-ecs-task-outcome.ts';
 
 export interface EcsTaskOptions {
   region: string;
@@ -68,7 +73,7 @@ export async function executeEcsTask(
 
   const taskFamily = `${options.taskName}-migration`;
   const logGroup = `/ecs/${taskFamily}`;
-  const logStreamPrefix = 'migration';
+  const logStreamPrefix = ECS_MIGRATION_CONTAINER_NAME;
 
   // Create log group if it doesn't exist (execution role may not have CreateLogGroup permission)
   try {
@@ -103,7 +108,7 @@ export async function executeEcsTask(
         taskRoleArn: options.taskRoleArn,
         containerDefinitions: [
           {
-            name: 'migration',
+            name: ECS_MIGRATION_CONTAINER_NAME,
             image: options.imageUri,
             command: options.command,
             essential: true,
@@ -187,6 +192,8 @@ export async function executeEcsTask(
   const pollInterval = 5000; // 5 seconds
   const startTime = Date.now();
   let taskSucceeded = false;
+  let lastOutcome: ReturnType<typeof readEcsTaskOutcome> | undefined;
+  let exitCodePendingPolls = 0;
 
   // Extract task ID from ARN (last part after /)
   const arnParts = taskArn.split('/');
@@ -206,16 +213,22 @@ export async function executeEcsTask(
         throw new Error('Task not found');
       }
 
-      const lastStatus = task.lastStatus;
-      runtime.logger.info(`Task status: ${lastStatus}`);
+      const outcome = readEcsTaskOutcome(task, ECS_MIGRATION_CONTAINER_NAME);
+      lastOutcome = outcome;
+      runtime.logger.info(`Task status: ${outcome.lastStatus}`);
 
-      if (lastStatus === 'STOPPED') {
-        // Check exit code
-        const container = task.containers?.[0];
-        const exitCode = container?.exitCode;
-
-        taskSucceeded = exitCode === 0;
+      if (outcome.state === 'succeeded' || outcome.state === 'failed') {
+        taskSucceeded = outcome.state === 'succeeded';
         break;
+      }
+
+      // STOPPED before the exit code is recorded: poll again for a while
+      // instead of reporting a successful task as failed
+      if (outcome.state === 'exit-code-pending') {
+        exitCodePendingPolls += 1;
+        if (exitCodePendingPolls > ECS_TASK_EXIT_CODE_GRACE_POLLS) {
+          break;
+        }
       }
 
       await sleep(pollInterval);
@@ -260,10 +273,18 @@ export async function executeEcsTask(
   if (taskSucceeded) {
     runtime.logger.success('Task completed successfully');
     return { success: true, logs };
-  } else {
-    runtime.logger.error('Task failed');
-    return { success: false, logs };
   }
+
+  const exitCodeText =
+    lastOutcome?.exitCode !== undefined
+      ? `exit code ${lastOutcome.exitCode}`
+      : lastOutcome?.state === 'exit-code-pending'
+        ? 'stopped, exit code not reported'
+        : `still ${lastOutcome?.lastStatus ?? 'unknown'} after ${maxWaitTime / 60000} minutes`;
+  runtime.logger.error(
+    `Task failed (${exitCodeText}${lastOutcome?.reason ? `; ${lastOutcome.reason}` : ''})`,
+  );
+  return { success: false, logs };
 }
 
 /**

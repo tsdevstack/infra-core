@@ -139,6 +139,48 @@ describe('generateDatabaseTf', () => {
     });
   });
 
+  describe('server name', () => {
+    it('should derive the name from project and environment by default', () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).toContain(
+        '  name                          = "${var.project_name}-${var.environment}-postgres"\n',
+      );
+    });
+
+    it('should not hardcode a server name by default', () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).not.toContain('myproject-dev-postgres');
+    });
+
+    it('should use database.serverName when set', () => {
+      const config = {
+        ...baseConfig,
+        database: { ...baseConfig.database, serverName: 'myproject-dev-pg-2' },
+      };
+      const result = generateDatabaseTf(config);
+      expect(result).toContain(
+        '  name                          = "myproject-dev-pg-2"\n',
+      );
+      expect(result).not.toContain(
+        '${var.project_name}-${var.environment}-postgres',
+      );
+    });
+
+    it('should change only the name line when serverName is set', () => {
+      const withDefault = generateDatabaseTf(baseConfig);
+      const withOverride = generateDatabaseTf({
+        ...baseConfig,
+        database: { ...baseConfig.database, serverName: 'myproject-dev-pg-2' },
+      });
+      expect(
+        withOverride.replace(
+          '"myproject-dev-pg-2"',
+          '"${var.project_name}-${var.environment}-postgres"',
+        ),
+      ).toBe(withDefault);
+    });
+  });
+
   describe('per-service databases', () => {
     it('should create per-service databases resource', () => {
       const result = generateDatabaseTf(baseConfig);

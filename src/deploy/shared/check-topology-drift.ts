@@ -6,6 +6,14 @@
  * that use the database (hasDatabase === true, or workers whose
  * base service has a database).
  *
+ * Whether a deployed service uses the database is decided by its config
+ * entry when it still has one. Discovery's database flag cannot tell: on
+ * GCP it means "a database named after the service exists", which is false
+ * for workers (they share their base service's database); Azure reports
+ * false for every container app; AWS does not report it. The flag (or the
+ * type-based fallback) is only used for deployed services that are no
+ * longer in config.
+ *
  * Throws InfraCoreError if topology has drifted.
  * Does nothing if topology matches or nothing is deployed (first deploy).
  */
@@ -29,10 +37,16 @@ export function checkTopologyDrift(params: {
 }): void {
   const { targetEnv, deployedServices, configServices } = params;
 
-  // Deployed side: use hasDatabase from discovery resources where available,
-  // fall back to type-based inference for providers that don't report it
+  const configByName = new Map(configServices.map((s) => [s.name, s]));
+
+  // Deployed side: config decides for services it still lists; discovery's
+  // database flag (or a type-based fallback) only for services removed from it
   const deployedNames = deployedServices
     .filter((s) => {
+      const configEntry = configByName.get(s.name);
+      if (configEntry) {
+        return isPoolRelevant(configEntry, configServices);
+      }
       if (s.resources?.hasDatabase !== undefined) {
         return s.resources.hasDatabase;
       }

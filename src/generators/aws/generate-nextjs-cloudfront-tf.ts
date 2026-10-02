@@ -154,6 +154,10 @@ resource "aws_cloudfront_distribution" "nextjs" {
 
     # CachingOptimized - 1 year TTL (AWS managed policy)
     cache_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+    # Forward Host like the other behaviors: CloudFront checks the ALB certificate
+    # against it (without it, against the ALB's own DNS name: 502), and the ALB
+    # routes to the Next.js target group by host
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.nextjs_forward_cookies[0].id
   }
 
   # Image optimization

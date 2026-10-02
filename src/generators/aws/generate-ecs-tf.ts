@@ -5,15 +5,18 @@
  * - ECS Cluster with Container Insights
  * - CloudWatch Log Groups (per service/worker/nextjs)
  * - Task Definitions (per service, worker, and nextjs)
- * - ECS Services (ALL services have load_balancer for ALB routing)
+ * - ECS Services (Kong behind the ALB, backend services on Cloud Map only)
  *
- * All services are registered with ALB target groups for internal routing.
- * Kong is the default ALB target, backend services use Host header routing.
- * Next.js services use host-based routing on the external HTTPS listener (port 443).
- * Backend services also register with Cloud Map for service-to-service calls.
+ * Only Kong is registered with an ALB target group (the default route of the
+ * external HTTPS listener). Next.js services use host-based routing on the same
+ * listener (port 443).
+ * Backend services have no load balancer: they register with Cloud Map and are
+ * reached inside the VPC as {service}.{project}.local:8080, by Kong and by
+ * other services.
+ * Every service runs at least one task (AWS has no scale-to-zero).
+ * NestJS services, Kong, workers and Next.js scale on CPU (target tracking, 70%)
+ * between minInstances and maxInstances.
  * Workers are always-on (minInstances >= 1) because they poll Redis.
- *
- * See: docs/in-dev/phase-21-aws-service-discovery-fix.md
  */
 
 export function generateEcsTf(): string {
@@ -82,7 +85,7 @@ resource "aws_ecs_task_definition" "service" {
     }]
 
     # Base environment variables for all services
-    # Kong gets additional vars for wake-up post-function plugin
+    # Kong gets additional vars for its proxy port and DNS resolution
     environment = concat(
       [
         { name = "NODE_ENV", value = "production" },
@@ -97,12 +100,6 @@ resource "aws_ecs_task_definition" "service" {
       each.key == "kong" ? [
         # Kong proxy port - must match ALB target group and ECS health check (8080)
         { name = "KONG_PROXY_LISTEN", value = "0.0.0.0:8080" },
-        # Wake-up Lambda URL for post-function plugin (scale-to-zero support)
-        { name = "WAKEUP_LAMBDA_URL", value = aws_lambda_function_url.wakeup.function_url },
-        # Whitelist resty.http for post-function plugin Lua code
-        { name = "KONG_UNTRUSTED_LUA_SANDBOX_REQUIRES", value = "resty.http" },
-        # Allow Lua sandbox to read WAKEUP_LAMBDA_URL via os.getenv()
-        { name = "KONG_UNTRUSTED_LUA_SANDBOX_ENVIRONMENT", value = "WAKEUP_LAMBDA_URL" },
         # Use VPC DNS to resolve Cloud Map service names (auth-service.tsdevstack.local)
         # VPC DNS is at CIDR base + 2 (10.0.0.2 for 10.0.0.0/16 VPC)
         { name = "KONG_DNS_RESOLVER", value = "10.0.0.2" },
@@ -121,15 +118,15 @@ resource "aws_ecs_task_definition" "service" {
       }
     }
 
-    # Kong uses custom health check script for OIDC warmup (zero-downtime deployment)
-    # Script polls for up to 50s, so timeout must be 60s. startPeriod gives extra grace.
-    # Other services use standard /health endpoint
+    # Kong: readiness of its status API (/status/ready on 8100), baked into the image
+    # as kong-health-check.sh; it does not wait for backends (OIDC discovery is
+    # fetched on the first authenticated request). Other services: /health endpoint.
     healthCheck = {
       command     = each.key == "kong" ? ["CMD-SHELL", "/usr/local/bin/kong-health-check.sh"] : ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval    = 30
-      timeout     = each.key == "kong" ? 60 : 5   # Kong: 60s (script polls up to 50s)
+      timeout     = 5
       retries     = 3
-      startPeriod = each.key == "kong" ? 180 : 60  # Kong: 3min grace for auth-service wake-up
+      startPeriod = 60
     }
   }])
 
@@ -146,11 +143,12 @@ resource "aws_ecs_service" "service" {
   name            = each.key
   cluster         = aws_ecs_cluster.main.id
   task_definition = aws_ecs_task_definition.service[each.key].arn
-  desired_count   = max(each.value.minInstances, 1)  # At least 1 for initial deploy
+  desired_count   = max(each.value.minInstances, 1)  # At least 1 (AWS has no scale-to-zero)
   launch_type     = "FARGATE"
 
   # Grace period before ALB health checks start (gives container time to start)
-  health_check_grace_period_seconds = 120
+  # Only Kong is behind the ALB; backend services have no load balancer
+  health_check_grace_period_seconds = each.key == "kong" ? 120 : null
 
   # Zero-downtime deployment: keep old task until new one is healthy
   deployment_minimum_healthy_percent = 100
@@ -169,15 +167,20 @@ resource "aws_ecs_service" "service" {
     assign_public_ip = false
   }
 
-  # All services get load balancer for ALB internal routing
-  load_balancer {
-    target_group_arn = aws_lb_target_group.service[each.key].arn
-    container_name   = each.key
-    container_port   = 8080
+  # Only Kong is registered with the ALB (external traffic via CloudFront)
+  # Backend services are private: reachable only inside the VPC via Cloud Map
+  dynamic "load_balancer" {
+    for_each = each.key == "kong" ? [1] : []
+    content {
+      target_group_arn = aws_lb_target_group.service[each.key].arn
+      container_name   = each.key
+      container_port   = 8080
+    }
   }
 
-  # Backend services register with Cloud Map for service-to-service discovery
-  # Kong doesn't need Cloud Map (it uses ALB for upstream routing)
+  # Backend services register with Cloud Map ({service}.{project}.local)
+  # Kong calls them there; services call each other there too
+  # Kong itself is not called by name inside the VPC, so it is not registered
   dynamic "service_registries" {
     for_each = each.key != "kong" ? [1] : []
     content {
@@ -194,6 +197,45 @@ resource "aws_ecs_service" "service" {
     # desired_count: Auto-scaling manages this
     ignore_changes = [task_definition, desired_count]
   }
+}
+
+# =============================================================================
+# Service Auto Scaling (NestJS services and Kong)
+# Services scale on CPU utilization within their configured min/max range
+# (minInstances >= 1: AWS has no scale-to-zero)
+# =============================================================================
+
+resource "aws_appautoscaling_target" "service" {
+  for_each = var.services
+
+  max_capacity       = each.value.maxInstances
+  min_capacity       = each.value.minInstances
+  resource_id        = "service/\${aws_ecs_cluster.main.name}/\${aws_ecs_service.service[each.key].name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+
+  depends_on = [aws_ecs_service.service]
+}
+
+resource "aws_appautoscaling_policy" "service_cpu" {
+  for_each = var.services
+
+  name               = "\${var.project_name}-\${each.key}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.service[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.service[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.service[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70.0
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+  }
+
+  depends_on = [aws_appautoscaling_target.service]
 }
 
 # =============================================================================

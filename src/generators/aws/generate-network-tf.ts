@@ -5,9 +5,9 @@
  * Single NAT Gateway used to minimize cost (~$32/month).
  * Gateway endpoints for S3/DynamoDB are free.
  *
- * Cloud Map provides DNS-based service discovery for service-to-service calls.
- * Kong uses ALB for external routing (with wake-up failover).
- * See: docs/in-dev/phase-21-aws-service-discovery-fix.md
+ * Cloud Map provides DNS-based service discovery inside the VPC:
+ * Kong and other services call backends as {service}.{project}.local:8080.
+ * The ALB only receives external traffic (443, 80 redirect) for Kong and Next.js.
  */
 
 export function generateNetworkTf(): string {
@@ -133,7 +133,6 @@ resource "aws_route_table_association" "private" {
 # ALB Security Group
 # External traffic (port 443) protected by X-Origin-Verify header validation
 # at ALB listener level - requests without valid header get 403.
-# Internal ports (8443, 8080) for Kong upstream routing.
 resource "aws_security_group" "alb" {
   name        = "\${var.project_name}-alb"
   description = "Security group for Application Load Balancer"
@@ -158,31 +157,6 @@ resource "aws_security_group" "alb" {
     description = "HTTP redirect to HTTPS"
   }
 
-  # Kong upstream routing via internal HTTPS listener (port 8443)
-  # Open to 0.0.0.0/0 because ECS->ALB traffic routes through NAT Gateway,
-  # which translates source IP to NAT's public EIP (outside VPC CIDR).
-  # Security: Port 8443 only has host-header routing rules - no default action.
-  ingress {
-    from_port   = 8443
-    to_port     = 8443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Internal HTTPS routing (Kong upstreams via NAT)"
-  }
-
-  # Kong OIDC discovery via internal HTTP listener (port 8080)
-  # HTTP (not HTTPS) so ALB sets X-Forwarded-Proto: http, X-Forwarded-Port: 8080
-  # Auth-service uses these headers to return jwks_uri that Kong can reach.
-  # Open to 0.0.0.0/0 for same NAT Gateway routing reason as port 8443.
-  # Security: Port 8080 only has path-based rule for /auth/.well-known/*.
-  ingress {
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Internal HTTP routing (Kong OIDC discovery via NAT)"
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -199,7 +173,7 @@ resource "aws_security_group" "ecs" {
   description = "Security group for ECS tasks"
   vpc_id      = aws_vpc.main.id
 
-  # Allow traffic from ALB
+  # Allow traffic from ALB (Kong and Next.js target groups)
   ingress {
     from_port       = 8080
     to_port         = 8080
@@ -208,7 +182,8 @@ resource "aws_security_group" "ecs" {
     description     = "Traffic from ALB"
   }
 
-  # Allow service-to-service traffic
+  # Allow service-to-service traffic (Kong to backends via Cloud Map, and
+  # backend to backend). All containers listen on 8080.
   ingress {
     from_port   = 8080
     to_port     = 8080
@@ -290,7 +265,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
 # =============================================================================
 # Provides DNS-based service discovery for service-to-service calls.
 # Services register as {service-name}.{project-name}.local
-# Kong uses ALB for external routing; Cloud Map is for direct internal calls.
+# Kong reaches backend services here (port 8080); services call each other here too.
 
 resource "aws_service_discovery_private_dns_namespace" "main" {
   name        = "\${var.project_name}.local"

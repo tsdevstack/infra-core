@@ -7,7 +7,7 @@
  * - Next.js Task Roles (per Next.js service): Runtime permissions for Next.js containers
  *
  * Note: Lambda roles are defined in their respective terraform files
- * (wakeup-lambda.tf, eventbridge.tf) to keep them colocated with their functions.
+ * (eventbridge.tf for the job invoker) to keep them colocated with their functions.
  */
 
 export function generateIamTf(): string {

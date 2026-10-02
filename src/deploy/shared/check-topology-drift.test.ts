@@ -348,6 +348,100 @@ describe('checkTopologyDrift', () => {
     });
   });
 
+  describe('deployed side decided by config', () => {
+    it('should count a deployed worker through its base service (GCP reports no database for workers)', () => {
+      expect(() =>
+        checkTopologyDrift({
+          targetEnv: 'dev',
+          deployedServices: [
+            {
+              name: 'auth-service',
+              type: 'backend',
+              resources: { hasDatabase: true },
+            },
+            {
+              name: 'auth-worker',
+              type: 'backend',
+              resources: { hasDatabase: false },
+            },
+            {
+              name: 'offers-service',
+              type: 'backend',
+              resources: { hasDatabase: true },
+            },
+          ],
+          configServices: [
+            { name: 'auth-service', type: 'nestjs', hasDatabase: true },
+            { name: 'offers-service', type: 'nestjs', hasDatabase: true },
+            {
+              name: 'auth-worker',
+              type: 'worker',
+              baseService: 'auth-service',
+            },
+          ],
+        }),
+      ).not.toThrow();
+    });
+
+    it('should still detect an added service when discovery reports hasDatabase: false for every service (Azure)', () => {
+      expect(() =>
+        checkTopologyDrift({
+          targetEnv: 'dev',
+          deployedServices: [
+            {
+              name: 'auth-service',
+              type: 'nestjs',
+              resources: { hasDatabase: false },
+            },
+          ],
+          configServices: [
+            { name: 'auth-service', type: 'nestjs', hasDatabase: true },
+            { name: 'offers-service', type: 'nestjs', hasDatabase: true },
+          ],
+        }),
+      ).toThrow('Added (in config but not deployed): offers-service');
+    });
+
+    it('should not count a deployed backend without a database when discovery reports no flag (AWS)', () => {
+      expect(() =>
+        checkTopologyDrift({
+          targetEnv: 'dev',
+          deployedServices: [
+            { name: 'auth-service', type: 'nestjs' },
+            { name: 'bff-service', type: 'nestjs' },
+          ],
+          configServices: [
+            { name: 'auth-service', type: 'nestjs', hasDatabase: true },
+            { name: 'bff-service', type: 'nestjs', hasDatabase: false },
+          ],
+        }),
+      ).not.toThrow();
+    });
+
+    it('should report a deployed database service that was removed from config', () => {
+      expect(() =>
+        checkTopologyDrift({
+          targetEnv: 'dev',
+          deployedServices: [
+            {
+              name: 'auth-service',
+              type: 'backend',
+              resources: { hasDatabase: true },
+            },
+            {
+              name: 'old-service',
+              type: 'backend',
+              resources: { hasDatabase: true },
+            },
+          ],
+          configServices: [
+            { name: 'auth-service', type: 'nestjs', hasDatabase: true },
+          ],
+        }),
+      ).toThrow('Removed (deployed but not in config): old-service');
+    });
+  });
+
   describe('deployed side type fallback', () => {
     it('should use type-based fallback when resources.hasDatabase is undefined', () => {
       expect(() =>

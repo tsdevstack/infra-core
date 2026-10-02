@@ -59,10 +59,19 @@ describe('generateAlbTf', () => {
   });
 
   describe('target groups', () => {
-    it('should create target groups using for_each', () => {
+    it('should create a target group for Kong only (keeps the service["kong"] address)', () => {
       const result = generateAlbTf();
       expect(result).toContain('resource "aws_lb_target_group" "service"');
-      expect(result).toContain('for_each = var.services');
+      expect(result).toContain(
+        'for_each = { for name, cfg in var.services : name => cfg if name == "kong" }',
+      );
+      expect(result).not.toContain('for_each = var.services');
+    });
+
+    it('should create target groups for Next.js services', () => {
+      const result = generateAlbTf();
+      expect(result).toContain('resource "aws_lb_target_group" "nextjs"');
+      expect(result).toContain('for_each = var.nextjs_services');
     });
 
     it('should use port 8080 for target groups', () => {
@@ -115,20 +124,31 @@ describe('generateAlbTf', () => {
     });
   });
 
-  describe('internal HTTPS listener', () => {
-    it('should create internal HTTPS listener on port 8443', () => {
+  describe('no internal listeners (backends are VPC-only)', () => {
+    it('should only create listeners on ports 443 and 80', () => {
       const result = generateAlbTf();
-      // Resource is named "internal" (not "internal_https") for Kong upstream routing
-      expect(result).toContain('resource "aws_lb_listener" "internal"');
-      expect(result).toContain('port              = 8443');
+      const listenerPorts = [
+        ...result.matchAll(/^ {2}port {14}= (\d+)$/gm),
+      ].map((m) => m[1]);
+      expect(listenerPorts).toEqual(['443', '80']);
+      expect(result.match(/resource "aws_lb_listener" /g)).toHaveLength(2);
     });
-  });
 
-  describe('internal HTTP listener', () => {
-    it('should create internal HTTP listener on port 8080', () => {
+    it('should not create the internal 8443 or 8080 listeners', () => {
       const result = generateAlbTf();
-      expect(result).toContain('resource "aws_lb_listener" "internal_http"');
-      expect(result).toContain('port              = 8080');
+      expect(result).not.toContain('resource "aws_lb_listener" "internal"');
+      expect(result).not.toContain(
+        'resource "aws_lb_listener" "internal_http"',
+      );
+      expect(result).not.toContain('8443');
+    });
+
+    it('should not create internal host rules or the OIDC discovery rule', () => {
+      const result = generateAlbTf();
+      expect(result).not.toContain('"internal_host"');
+      expect(result).not.toContain('"oidc_discovery_http"');
+      expect(result).not.toContain('.internal');
+      expect(result).not.toContain('/auth/.well-known/*');
     });
   });
 
@@ -142,14 +162,26 @@ describe('generateAlbTf', () => {
   });
 
   describe('host-based routing', () => {
-    it('should create listener rules for internal routing', () => {
+    it('should create Next.js listener rules on the HTTPS listener', () => {
       const result = generateAlbTf();
-      expect(result).toContain('resource "aws_lb_listener_rule"');
+      expect(result).toContain(
+        'resource "aws_lb_listener_rule" "nextjs_origin_verify"',
+      );
+      expect(result).toContain('listener_arn = aws_lb_listener.https.arn');
     });
 
     it('should route based on Host header', () => {
       const result = generateAlbTf();
       expect(result).toContain('host_header');
+    });
+
+    it('should only attach listener rules to the HTTPS listener', () => {
+      const result = generateAlbTf();
+      const listenerRefs = [
+        ...result.matchAll(/listener_arn = (aws_lb_listener\.\w+)\.arn/g),
+      ].map((m) => m[1]);
+      expect(listenerRefs.length).toBeGreaterThan(0);
+      expect(new Set(listenerRefs)).toEqual(new Set(['aws_lb_listener.https']));
     });
   });
 

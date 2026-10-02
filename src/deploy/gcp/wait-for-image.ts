@@ -56,7 +56,7 @@ export async function waitForImage(
   throw new InfraCoreError(
     `Image not found after ${maxAttempts} attempts: ${imageUri}`,
     'wait-for-image',
-    'The image may still be propagating. Wait a moment and try again, or verify the image was pushed successfully.',
+    'Deploy commands default the image tag to the current git commit (git rev-parse --short HEAD). If you committed after building, pass --tag with the tag you built, or build and push again (infra:build-docker, infra:push-docker). Otherwise the image may still be propagating: wait a moment and try again.',
   );
 }
 

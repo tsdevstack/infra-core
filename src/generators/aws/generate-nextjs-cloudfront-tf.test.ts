@@ -104,6 +104,22 @@ describe('generateNextjsCloudfrontTf', () => {
       expect(result).toContain('path_pattern           = "/_next/static/*"');
     });
 
+    it('should forward Host on every behavior that targets the ALB (certificate check and host routing)', () => {
+      const result = generateNextjsCloudfrontTf();
+      const behaviors = result
+        .split(/(?=default_cache_behavior \{|ordered_cache_behavior \{)/)
+        .slice(1)
+        .map((block) => block.slice(0, block.indexOf('\n  }')));
+
+      expect(behaviors).toHaveLength(4);
+      for (const behavior of behaviors) {
+        expect(behavior).toContain('target_origin_id       = "alb"');
+        expect(behavior).toContain(
+          'aws_cloudfront_origin_request_policy.nextjs_forward_cookies[0].id',
+        );
+      }
+    });
+
     it('should have image optimization behavior', () => {
       const result = generateNextjsCloudfrontTf();
       expect(result).toContain('path_pattern           = "/_next/image/*"');

@@ -56,7 +56,7 @@ variable "services" {
   type = map(object({
     cpu          = number
     memory       = number
-    minInstances = number  # 0 = can scale to zero, 1+ = always running
+    minInstances = number  # 1+ (AWS has no scale-to-zero)
     maxInstances = number
     dbPoolMax    = number  # Database connection pool size per instance
   }))
