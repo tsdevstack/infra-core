@@ -88,10 +88,10 @@ db_instance_class            = "db.t3.micro"
 database_storage_size        = 20
 database_deletion_protection = false
 database_backup              = false
+database_ha                  = false
 
 # Redis (ElastiCache)
-redis_node_type         = "cache.t3.micro"
-redis_high_availability = false
+redis_node_type = "cache.t3.micro"
 "
 `;
 
@@ -129,9 +129,9 @@ db_instance_class            = "db.t3.micro"
 database_storage_size        = 20
 database_deletion_protection = false
 database_backup              = false
+database_ha                  = false
 
 # Redis (ElastiCache)
-redis_node_type         = "cache.t3.micro"
-redis_high_availability = false
+redis_node_type = "cache.t3.micro"
 "
 `;

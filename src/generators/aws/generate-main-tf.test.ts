@@ -17,7 +17,7 @@ describe('generateMainTf', () => {
       deletionProtection: false,
       backup: false,
     },
-    redis: { tier: 'cache.t3.micro', highAvailability: false },
+    redis: { tier: 'cache.t3.micro' },
     servicesWithDatabase: [],
     baseDomain: 'example.com',
     services: {},

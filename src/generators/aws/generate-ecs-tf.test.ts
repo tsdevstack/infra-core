@@ -190,11 +190,11 @@ describe('generateEcsTf', () => {
   describe('Cloud Map service discovery', () => {
     // Note: Cloud Map namespace is created in generate-network-tf.ts, not here
 
-    it('should register backend services with Cloud Map (excludes Kong)', () => {
+    it('should register every service with Cloud Map, Kong included', () => {
       const result = generateEcsTf();
-      // Uses dynamic block to conditionally add service_registries for non-Kong services
-      expect(result).toContain('dynamic "service_registries"');
-      expect(result).toContain('each.key != "kong"');
+      // Kong is called there by the Next.js servers (KONG_INTERNAL_URL)
+      expect(result).not.toContain('dynamic "service_registries"');
+      expect(result).not.toContain('each.key != "kong"');
       expect(result).toContain(
         'aws_service_discovery_service.service[each.key].arn',
       );
@@ -276,6 +276,26 @@ describe('generateEcsTf', () => {
       const result = generateEcsTf();
       expect(result).toContain(
         '{ name = "KONG_DNS_RESOLVER", value = "10.0.0.2" }',
+      );
+    });
+
+    it('should read the client address from the CloudFront function header', () => {
+      const result = generateEcsTf();
+      expect(result).toContain(
+        '{ name = "KONG_TRUSTED_IPS", value = "0.0.0.0/0,::/0" },',
+      );
+      expect(result).toContain(
+        '{ name = "KONG_REAL_IP_HEADER", value = "X-Tsdevstack-Edge-IP" },',
+      );
+      expect(result).toContain(
+        '{ name = "KONG_REAL_IP_RECURSIVE", value = "off" },',
+      );
+    });
+
+    it('should give Next.js the visitor header name', () => {
+      const result = generateEcsTf();
+      expect(result).toContain(
+        '{ name = "TSDEVSTACK_CLIENT_IP_HEADER", value = "X-Tsdevstack-Edge-IP" },',
       );
     });
 

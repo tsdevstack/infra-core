@@ -33,6 +33,10 @@ resource "aws_secretsmanager_secret" "job_auth" {
   name        = "\${var.project_name}-shared-JOB_AUTH_SECRET"
   description = "Secret for authenticating scheduled job invocations"
 
+  # Delete immediately on destroy: the default 30-day recovery window keeps
+  # the name taken, so recreating the environment would fail.
+  recovery_window_in_days = 0
+
   tags = {
     Name           = "\${var.project_name}-job-auth"
     "project-name" = var.project_name

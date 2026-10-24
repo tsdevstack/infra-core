@@ -5,6 +5,7 @@
  * - DB subnet group (uses private subnets)
  * - Random master password
  * - RDS PostgreSQL 15 instance
+ * - Master password secret (Secrets Manager)
  *
  * Note: Individual databases and users are created at deploy time via init job,
  * not in Terraform, matching the GCP pattern.
@@ -35,6 +36,12 @@ resource "random_password" "db_master" {
   special = false
 }
 
+# Suffix for the final snapshot: a fixed name makes the next destroy in the
+# same account fail once a snapshot with that name exists.
+resource "random_id" "db_final_snapshot" {
+  byte_length = 4
+}
+
 # =============================================================================
 # RDS PostgreSQL Instance
 # =============================================================================
@@ -52,18 +59,22 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
+  multi_az               = var.database_ha
 
-  allocated_storage     = 20
-  max_allocated_storage = 100
+  # Autoscaling ceiling (max_allocated_storage) must stay above the allocated size
+  allocated_storage     = var.database_storage_size
+  max_allocated_storage = max(100, var.database_storage_size * 2)
   storage_type          = "gp3"
   storage_encrypted     = true
 
-  backup_retention_period   = 7
-  backup_window             = "03:00-04:00"
+  # Retention 0 turns automated backups (and point-in-time recovery) off;
+  # the backup window is left unset then
+  backup_retention_period   = var.database_backup ? 7 : 0
+  backup_window             = var.database_backup ? "03:00-04:00" : null
   maintenance_window        = "Mon:04:00-Mon:05:00"
   deletion_protection       = var.database_deletion_protection
   skip_final_snapshot       = false
-  final_snapshot_identifier = "\${var.project_name}-db-final"
+  final_snapshot_identifier = "\${var.project_name}-db-final-\${random_id.db_final_snapshot.hex}"
 
   performance_insights_enabled = false
 
@@ -77,6 +88,10 @@ resource "aws_db_instance" "main" {
 resource "aws_secretsmanager_secret" "db_master_password" {
   name        = "\${var.project_name}-db-master-password"
   description = "RDS master password for \${var.project_name}"
+
+  # Delete immediately on destroy: the default 30-day recovery window keeps
+  # the name taken, so recreating the environment would fail.
+  recovery_window_in_days = 0
 
   tags = { Name = "\${var.project_name}-db-master-password" }
 }

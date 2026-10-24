@@ -7,7 +7,10 @@
  * - CORS configuration (allow all origins — presigned URLs control access)
  * - Soft delete policy with 7-day retention
  * - IAM: roles/storage.objectUser for all service accounts
- * - IAM: roles/iam.serviceAccountTokenCreator for presigned URL signing
+ * - IAM: roles/iam.serviceAccountTokenCreator for presigned URL signing,
+ *   granted on each runtime service account itself (a project-level grant
+ *   would let every service act as every service account in the project)
+ * - The IAM Service Account Credentials API (signBlob), kept on destroy
  *
  * force_destroy = true allows Terraform to delete non-empty buckets.
  * WARNING: This is permanent — NOT recoverable.
@@ -80,16 +83,26 @@ resource "google_storage_bucket_iam_member" "storage_object_user" {
 }
 
 # =============================================================================
-# IAM — grant serviceAccountTokenCreator for presigned URL signing
-# Required for GCS presigned URL generation via Application Default Credentials
+# IAM — let each runtime service account sign blobs as itself
+# Presigned URLs from Application Default Credentials call signBlob on the
+# service's own account. Granted on that account only: a project-level grant
+# would let every service act as every service account in the project.
 # =============================================================================
 
-resource "google_project_iam_member" "storage_token_creator" {
+resource "google_service_account_iam_member" "storage_token_creator" {
   for_each = toset(local.services)
 
-  project = var.gcp_project_id
-  role    = "roles/iam.serviceAccountTokenCreator"
-  member  = "serviceAccount:\${google_service_account.runtime[each.key].email}"
+  service_account_id = google_service_account.runtime[each.key].name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:\${google_service_account.runtime[each.key].email}"
+}
+
+# signBlob is served by the IAM Service Account Credentials API. Left enabled
+# when buckets are removed: CI (Workload Identity Federation) uses it too.
+resource "google_project_service" "iamcredentials" {
+  project            = var.gcp_project_id
+  service            = "iamcredentials.googleapis.com"
+  disable_on_destroy = false
 }
 
 # =============================================================================

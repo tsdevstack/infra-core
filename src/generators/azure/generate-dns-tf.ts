@@ -115,9 +115,21 @@ function buildCustomDomainSection(params: CustomDomainParams): string {
   const subdomain = isApex ? '' : domain.replace(`.${baseDomain}`, '');
   const dnsAuthName = isApex ? '_dnsauth' : `_dnsauth.${subdomain}`;
 
+  // The apex can't be a CNAME, so it gets alias records to the Front Door
+  // endpoint: A for IPv4 and AAAA for IPv6 (Front Door endpoints serve both;
+  // subdomains get both through their CNAME)
   const dnsRecord = isApex
     ? `
 resource "azurerm_dns_a_record" "${tfId}" {
+  name                = "@"
+  zone_name           = azurerm_dns_zone.main.name
+  resource_group_name = data.azurerm_resource_group.main.name
+  ttl                 = 3600
+
+  target_resource_id = azurerm_cdn_frontdoor_endpoint.${tfId}.id
+}
+
+resource "azurerm_dns_aaaa_record" "${tfId}" {
   name                = "@"
   zone_name           = azurerm_dns_zone.main.name
   resource_group_name = data.azurerm_resource_group.main.name

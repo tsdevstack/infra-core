@@ -29,6 +29,12 @@ describe('generateRoute53Tf', () => {
       const result = generateRoute53Tf();
       expect(result).toContain('type    = "A"');
     });
+
+    it('should add an AAAA record (the distribution has IPv6 enabled)', () => {
+      const result = generateRoute53Tf();
+      expect(result).toContain('resource "aws_route53_record" "api_ipv6"');
+      expect(result).toContain('type    = "AAAA"');
+    });
   });
 
   describe('CloudFront alias', () => {

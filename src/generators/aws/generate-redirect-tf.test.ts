@@ -65,7 +65,7 @@ describe('generateRedirectTf', () => {
       expect(result).toContain(
         'resource "aws_cloudfront_distribution" "redirect_old_com"',
       );
-      expect(result).toContain('web_acl_id   = aws_wafv2_web_acl.main.arn');
+      expect(result).toContain('web_acl_id      = aws_wafv2_web_acl.main.arn');
     });
 
     it('should attach response headers policy', () => {
@@ -92,8 +92,19 @@ describe('generateRedirectTf', () => {
       expect(result).toContain('name    = "*.old.com"');
     });
 
+    it('should enable IPv6 with AAAA records for both names', () => {
+      expect(result).toContain('is_ipv6_enabled = true');
+      expect(result).toContain(
+        'resource "aws_route53_record" "redirect_old_com_ipv6"',
+      );
+      expect(result).toContain(
+        'resource "aws_route53_record" "redirect_wildcard_old_com_ipv6"',
+      );
+      expect(result.match(/type {4}= "AAAA"/g)).toHaveLength(2);
+    });
+
     it('should include aliases for both apex and wildcard', () => {
-      expect(result).toContain('aliases      = ["old.com", "*.old.com"]');
+      expect(result).toContain('aliases         = ["old.com", "*.old.com"]');
     });
   });
 

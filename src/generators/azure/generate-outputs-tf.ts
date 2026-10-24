@@ -53,6 +53,18 @@ output "nextjs_${tfId}_app_service_name" {
     })
     .join('\n');
 
+  // Next.js servers call Kong at its default host name, which resolves to
+  // Kong's private endpoint in the VNet (generate-app-service-tf.ts)
+  const kongInternalUrlOutput =
+    nextjsEntries.length > 0
+      ? `
+
+output "kong_internal_url" {
+  description = "Kong URL for Next.js server-side calls (private endpoint in the VNet)"
+  value       = "https://\${azurerm_linux_web_app.kong.default_hostname}"
+}`
+      : '';
+
   const appServiceSection = `
 
 # =============================================================================
@@ -62,7 +74,7 @@ output "nextjs_${tfId}_app_service_name" {
 output "kong_app_service_name" {
   description = "App Service name for Kong"
   value       = azurerm_linux_web_app.kong.name
-}
+}${kongInternalUrlOutput}
 ${nextjsAppServiceOutputs}`;
 
   return `# Stack outputs

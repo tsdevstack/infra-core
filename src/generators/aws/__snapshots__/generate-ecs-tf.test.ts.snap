@@ -84,6 +84,12 @@ resource "aws_ecs_task_definition" "service" {
         # Use VPC DNS to resolve Cloud Map service names (auth-service.tsdevstack.local)
         # VPC DNS is at CIDR base + 2 (10.0.0.2 for 10.0.0.0/16 VPC)
         { name = "KONG_DNS_RESOLVER", value = "10.0.0.2" },
+        # Client address: the header the CloudFront function sets (cloudfront.tf),
+        # trusted from any peer (only the ALB and this project's tasks reach Kong).
+        # infra:deploy-kong sets the same values on every deploy.
+        { name = "KONG_TRUSTED_IPS", value = "0.0.0.0/0,::/0" },
+        { name = "KONG_REAL_IP_HEADER", value = "X-Tsdevstack-Edge-IP" },
+        { name = "KONG_REAL_IP_RECURSIVE", value = "off" },
       ] : []
     )
 
@@ -159,14 +165,11 @@ resource "aws_ecs_service" "service" {
     }
   }
 
-  # Backend services register with Cloud Map ({service}.{project}.local)
-  # Kong calls them there; services call each other there too
-  # Kong itself is not called by name inside the VPC, so it is not registered
-  dynamic "service_registries" {
-    for_each = each.key != "kong" ? [1] : []
-    content {
-      registry_arn = aws_service_discovery_service.service[each.key].arn
-    }
+  # Every service registers with Cloud Map ({service}.{project}.local):
+  # Kong calls the backends there, services call each other there, and the
+  # Next.js servers call Kong there (kong.{project}.local, KONG_INTERNAL_URL)
+  service_registries {
+    registry_arn = aws_service_discovery_service.service[each.key].arn
   }
 
   depends_on = [aws_lb_listener.https]
@@ -393,6 +396,9 @@ resource "aws_ecs_task_definition" "nextjs" {
       { name = "SECRETS_PROVIDER", value = "aws" },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "PROJECT_NAME", value = var.project_name },
+      # The visitor's address, from the CloudFront function header (cloudfront.tf);
+      # infra:deploy-services sets it on every deploy too
+      { name = "TSDEVSTACK_CLIENT_IP_HEADER", value = "X-Tsdevstack-Edge-IP" },
     ]
 
     logConfiguration = {

@@ -32,6 +32,13 @@ export interface DeployEcsServiceWithSecretsOptions {
   hasDatabase: boolean;
   /** Additional secrets to inject (env var name → Secrets Manager ARN) */
   additionalSecrets?: Record<string, string>;
+  /**
+   * Plain environment variables set on every deploy (env var name → value),
+   * over the ones the task definition already has. Terraform sets the same
+   * values at creation, but the service keeps the CLI's task definitions
+   * afterwards, so a new setting only reaches an existing environment here.
+   */
+  additionalEnvironment?: Record<string, string>;
 }
 
 export interface DeployEcsServiceWithSecretsResult {
@@ -54,6 +61,7 @@ export async function deployEcsServiceWithSecrets(
     imageUri,
     hasDatabase,
     additionalSecrets,
+    additionalEnvironment,
   } = options;
 
   const region = credentials.region;
@@ -126,6 +134,19 @@ export async function deployEcsServiceWithSecrets(
       }
     }
 
+    // Environment: what the task definition has, with the deploy's values on top
+    const environment = [
+      ...(existingContainer.environment ?? []).filter(
+        (entry) =>
+          entry.name === undefined ||
+          !(additionalEnvironment && entry.name in additionalEnvironment),
+      ),
+      ...Object.entries(additionalEnvironment ?? {}).map(([name, value]) => ({
+        name,
+        value,
+      })),
+    ];
+
     // Step 3: Register new task definition with secrets
     runtime.logger.info(
       `  Registering task definition with ${secretsArray.length} secret(s)...`,
@@ -140,16 +161,15 @@ export async function deployEcsServiceWithSecrets(
         memory: existingTaskDef.memory,
         executionRoleArn: existingTaskDef.executionRoleArn,
         taskRoleArn: existingTaskDef.taskRoleArn,
+        // The container as the task definition has it (ports, logging, health
+        // check, a worker's command, ...), with only the image, the
+        // environment and the secrets replaced
         containerDefinitions: [
           {
-            name: existingContainer.name,
+            ...existingContainer,
             image: imageUri,
-            portMappings: existingContainer.portMappings,
-            environment: existingContainer.environment,
+            environment,
             secrets: secretsArray.length > 0 ? secretsArray : undefined,
-            logConfiguration: existingContainer.logConfiguration,
-            healthCheck: existingContainer.healthCheck,
-            essential: existingContainer.essential,
           },
         ],
       }),

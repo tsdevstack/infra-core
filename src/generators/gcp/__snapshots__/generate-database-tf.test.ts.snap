@@ -71,17 +71,27 @@ resource "google_sql_database" "offers_service" {
 # - Local: Fetched from Secret Manager via cloud-secrets:get
 
 # Database user for auth-service
+# ABANDON: on destroy Terraform drops the user from its state instead of
+# deleting it; deleting the instance removes it. Terraform deletes users in
+# parallel with their databases, and Postgres refuses to drop a role that
+# still owns objects. The provider documents ABANDON for Postgres users.
 resource "google_sql_user" "auth_service_user" {
-  name     = "auth-service"
-  instance = google_sql_database_instance.postgres.name
-  password = var.db_auth_password
+  name            = "auth-service"
+  instance        = google_sql_database_instance.postgres.name
+  password        = var.db_auth_password
+  deletion_policy = "ABANDON"
 }
 
 # Database user for offers-service
+# ABANDON: on destroy Terraform drops the user from its state instead of
+# deleting it; deleting the instance removes it. Terraform deletes users in
+# parallel with their databases, and Postgres refuses to drop a role that
+# still owns objects. The provider documents ABANDON for Postgres users.
 resource "google_sql_user" "offers_service_user" {
-  name     = "offers-service"
-  instance = google_sql_database_instance.postgres.name
-  password = var.db_offers_password
+  name            = "offers-service"
+  instance        = google_sql_database_instance.postgres.name
+  password        = var.db_offers_password
+  deletion_policy = "ABANDON"
 }
 "
 `;
@@ -213,10 +223,15 @@ resource "google_sql_database" "auth_service" {
 # - Local: Fetched from Secret Manager via cloud-secrets:get
 
 # Database user for auth-service
+# ABANDON: on destroy Terraform drops the user from its state instead of
+# deleting it; deleting the instance removes it. Terraform deletes users in
+# parallel with their databases, and Postgres refuses to drop a role that
+# still owns objects. The provider documents ABANDON for Postgres users.
 resource "google_sql_user" "auth_service_user" {
-  name     = "auth-service"
-  instance = google_sql_database_instance.postgres.name
-  password = var.db_auth_password
+  name            = "auth-service"
+  instance        = google_sql_database_instance.postgres.name
+  password        = var.db_auth_password
+  deletion_policy = "ABANDON"
 }
 "
 `;

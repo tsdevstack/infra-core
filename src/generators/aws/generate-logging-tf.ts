@@ -22,7 +22,8 @@ export function generateLoggingTf(): string {
 # =============================================================================
 
 resource "aws_s3_bucket" "alb_logs" {
-  bucket = "\${var.project_name}-\${var.environment}-alb-logs-\${var.aws_account_id}"
+  bucket        = "\${var.project_name}-\${var.environment}-alb-logs-\${var.aws_account_id}"
+  force_destroy = true
 
   tags = { Name = "\${var.project_name}-alb-logs" }
 }
@@ -68,7 +69,8 @@ resource "aws_s3_bucket_policy" "alb_logs" {
 # All distributions share this bucket with different prefixes.
 
 resource "aws_s3_bucket" "cloudfront_logs" {
-  bucket = "\${var.project_name}-\${var.environment}-cf-logs-\${var.aws_account_id}"
+  bucket        = "\${var.project_name}-\${var.environment}-cf-logs-\${var.aws_account_id}"
+  force_destroy = true
 
   tags = { Name = "\${var.project_name}-cloudfront-logs" }
 }

@@ -18,8 +18,8 @@
  * Database configuration for Terraform generation
  *
  * Unified from:
- * - Azure: { tier, storageSizeGb, deletionProtection, backup }
- * - AWS:   { tier, storageSizeGb, deletionProtection, backup }
+ * - Azure: { tier, storageSizeGb, deletionProtection, backup, ha }
+ * - AWS:   { tier, storageSizeGb, deletionProtection, backup, ha }
  * - GCP:   { tier, diskSize, ha, backup }
  */
 export interface DatabaseConfig {
@@ -28,7 +28,10 @@ export interface DatabaseConfig {
   storageSizeGb: number;
   deletionProtection: boolean;
   backup: boolean;
-  /** High availability — GCP only */
+  /**
+   * High availability: GCP regional instance, AWS Multi-AZ, Azure
+   * zone-redundant standby (not on Burstable tiers). Default false.
+   */
   ha?: boolean;
   /**
    * PostgreSQL Flexible Server name override — Azure only.
@@ -42,15 +45,13 @@ export interface DatabaseConfig {
  *
  * Unified from:
  * - Azure: { tier }
- * - AWS:   { tier, highAvailability }
+ * - AWS:   { tier }
  * - GCP:   { tier, memoryGb }
  */
 export interface RedisConfig {
   tier: string;
-  /** Memory size in GB — GCP only */
+  /** Memory size in GB — GCP only (AWS and Azure size Redis by tier) */
   memoryGb?: number;
-  /** Enable high availability — AWS only */
-  highAvailability?: boolean;
 }
 
 /**
@@ -311,6 +312,19 @@ export interface BaseInfraConfig {
 // Provider extensions — discriminated union
 // ---------------------------------------------------------------------------
 
+/**
+ * Instance count and autoscale ceiling of an App Service plan (Azure)
+ */
+export interface AppServicePlanScaling {
+  /** Workers the plan always runs (minInstances, at least 1) */
+  instances: number;
+  /**
+   * Upper bound of the CPU autoscale rule, or null when the plan does not
+   * autoscale (Basic SKU, or maxInstances not above instances)
+   */
+  autoscaleMax: number | null;
+}
+
 export interface AzureInfraConfig extends BaseInfraConfig {
   provider: 'azure';
   subscriptionId: string;
@@ -322,6 +336,10 @@ export interface AzureInfraConfig extends BaseInfraConfig {
   kongAppServiceSku: string;
   /** Next.js App Service Plan SKU (e.g., B1, S1) */
   nextjsAppServiceSku: string;
+  /** Kong App Service plan: instances and autoscale ceiling */
+  kongScaling: AppServicePlanScaling;
+  /** Next.js App Service plan (shared by every Next.js app): instances and autoscale ceiling */
+  nextjsScaling: AppServicePlanScaling;
   /** Skip custom domain associations in routes and security policy (for two-phase deploy recovery) */
   skipCustomDomainAssociations?: boolean;
 }

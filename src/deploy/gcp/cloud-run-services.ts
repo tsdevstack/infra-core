@@ -104,6 +104,10 @@ export async function deployCloudRunService(
       // - false: CPU always allocated even when idle (required for workers)
       cpuIdle: options.cpuIdle ?? true,
     },
+    // Liveness only (no database): the app listens once its database
+    // answered (waitForDatabase), so passing this probe means ready. Every
+    // 2 s for up to 120 s: a 10 s period added up to 10 s to cold starts,
+    // and the window covers the 60 s database wait plus boot time.
     startupProbe: {
       httpGet: {
         path: '/health',
@@ -111,8 +115,8 @@ export async function deployCloudRunService(
       },
       initialDelaySeconds: 0,
       timeoutSeconds: 3,
-      periodSeconds: 10,
-      failureThreshold: 3,
+      periodSeconds: 2,
+      failureThreshold: 60,
     },
   };
 

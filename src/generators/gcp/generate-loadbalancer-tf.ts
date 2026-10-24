@@ -14,6 +14,7 @@
  * - Certificate Manager with DNS Authorization (100 domain limit)
  * - HTTPS proxy and forwarding rule
  * - HTTP to HTTPS redirect
+ * - The client's address on every Cloud Run backend (GCP_EDGE_CLIENT_IP_HEADER)
  */
 
 import type {
@@ -25,6 +26,7 @@ import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
 import { toDnsAuthName } from '../../utils/gcp/to-dns-auth-name.ts';
 import { generateCustomWafRules } from './generate-custom-waf-rules.ts';
 import { generateSpaEdgeSecurityPolicy } from './generate-spa-edge-security-policy.ts';
+import { GCP_EDGE_CLIENT_IP_HEADER } from '../../constants/gcp-client-ip.ts';
 
 /**
  * Frontend service with its domain and hosting type
@@ -116,6 +118,9 @@ resource "google_compute_backend_service" "${toTerraformId(service.name)}" {
   protocol        = "HTTPS"
   security_policy = google_compute_security_policy.default.id
   enable_cdn      = true
+
+  # The client's address for the app (forwarded to Kong for its visitors)
+  custom_request_headers = ["${GCP_EDGE_CLIENT_IP_HEADER}: {client_ip_address}"]
 
   # Security headers applied at load balancer level
   custom_response_headers = [
@@ -348,6 +353,13 @@ resource "google_compute_global_address" "lb" {
   name = "\${var.project_name}-lb-ip"
 }
 
+# IPv6 address for IPv6 visitors (AAAA records); the load balancer terminates
+# IPv6 and reaches the backends as before
+resource "google_compute_global_address" "lb_ipv6" {
+  name       = "\${var.project_name}-lb-ipv6"
+  ip_version = "IPV6"
+}
+
 # =============================================================================
 # Cloud Armor Security Policy (WAF) - Optimized for REST APIs
 # =============================================================================
@@ -553,6 +565,9 @@ resource "google_compute_backend_service" "kong" {
   protocol        = "HTTPS"
   security_policy = google_compute_security_policy.default.id
 
+  # The client's address, read by Kong (GCP_KONG_CLIENT_IP_SETTINGS)
+  custom_request_headers = ["${GCP_EDGE_CLIENT_IP_HEADER}: {client_ip_address}"]
+
   # Security headers applied at load balancer level
   custom_response_headers = [
     "Strict-Transport-Security: max-age=63072000; includeSubDomains; preload",
@@ -726,6 +741,16 @@ resource "google_compute_global_forwarding_rule" "https" {
   depends_on = [google_compute_target_https_proxy.main]
 }
 
+# Same proxy on the IPv6 address
+resource "google_compute_global_forwarding_rule" "https_ipv6" {
+  name       = "\${var.project_name}-https-ipv6"
+  ip_address = google_compute_global_address.lb_ipv6.address
+  port_range = "443"
+  target     = google_compute_target_https_proxy.main.id
+
+  depends_on = [google_compute_target_https_proxy.main]
+}
+
 # =============================================================================
 # HTTP to HTTPS Redirect
 # =============================================================================
@@ -752,6 +777,13 @@ resource "google_compute_global_forwarding_rule" "http_redirect" {
   target     = google_compute_target_http_proxy.redirect.id
 }
 
+resource "google_compute_global_forwarding_rule" "http_redirect_ipv6" {
+  name       = "\${var.project_name}-http-redirect-ipv6"
+  ip_address = google_compute_global_address.lb_ipv6.address
+  port_range = "80"
+  target     = google_compute_target_http_proxy.redirect.id
+}
+
 # =============================================================================
 # Outputs
 # =============================================================================
@@ -759,6 +791,11 @@ resource "google_compute_global_forwarding_rule" "http_redirect" {
 output "load_balancer_ip" {
   description = "Static IP address for the load balancer"
   value       = google_compute_global_address.lb.address
+}
+
+output "load_balancer_ipv6" {
+  description = "Static IPv6 address for the load balancer (AAAA records)"
+  value       = google_compute_global_address.lb_ipv6.address
 }
 
 output "api_url" {

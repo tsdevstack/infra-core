@@ -15,6 +15,12 @@ describe('generateLoggingTf', () => {
       );
     });
 
+    it('should empty the bucket on destroy', () => {
+      expect(result).toContain(
+        'bucket        = "${var.project_name}-${var.environment}-alb-logs-${var.aws_account_id}"\n  force_destroy = true',
+      );
+    });
+
     it('should configure 90 day lifecycle', () => {
       expect(result).toContain(
         'resource "aws_s3_bucket_lifecycle_configuration" "alb_logs"',
@@ -33,6 +39,12 @@ describe('generateLoggingTf', () => {
   describe('CloudFront logs bucket', () => {
     it('should create CloudFront logs S3 bucket', () => {
       expect(result).toContain('resource "aws_s3_bucket" "cloudfront_logs"');
+    });
+
+    it('should empty the bucket on destroy', () => {
+      expect(result).toContain(
+        'bucket        = "${var.project_name}-${var.environment}-cf-logs-${var.aws_account_id}"\n  force_destroy = true',
+      );
     });
 
     it('should enable ACL-based ownership for CloudFront logging', () => {

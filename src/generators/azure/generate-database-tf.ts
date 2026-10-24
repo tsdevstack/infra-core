@@ -12,6 +12,16 @@ export function generateDatabaseTf(config: AzureInfraConfig): string {
 
   const storageMb = config.database.storageSizeGb * 1024;
 
+  // Zone-redundant standby: General Purpose and Memory Optimized tiers only,
+  // in regions with availability zones (checked by validation and preflight)
+  const highAvailabilityBlock = config.database.ha
+    ? `
+  high_availability {
+    mode = "ZoneRedundant"
+  }
+`
+    : '';
+
   // Default name stays a Terraform expression so existing projects generate unchanged
   const serverName =
     config.database.serverName !== undefined
@@ -49,7 +59,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   geo_redundant_backup_enabled  = false
   public_network_access_enabled = false
   tags                          = local.tags
-
+${highAvailabilityBlock}
   depends_on = [azurerm_private_dns_zone_virtual_network_link.postgres]
 
   lifecycle {

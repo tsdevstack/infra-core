@@ -10,22 +10,27 @@ describe('generateCloudfrontTf', () => {
 
     it('should be enabled', () => {
       const result = generateCloudfrontTf();
-      expect(result).toContain('enabled      = true');
+      expect(result).toContain('enabled         = true');
     });
 
     it('should attach WAF Web ACL', () => {
       const result = generateCloudfrontTf();
-      expect(result).toContain('web_acl_id   = aws_wafv2_web_acl.main.arn');
+      expect(result).toContain('web_acl_id      = aws_wafv2_web_acl.main.arn');
     });
 
     it('should use PriceClass_100 for cost optimization', () => {
       const result = generateCloudfrontTf();
-      expect(result).toContain('price_class  = "PriceClass_100"');
+      expect(result).toContain('price_class     = "PriceClass_100"');
+    });
+
+    it('should enable IPv6', () => {
+      const result = generateCloudfrontTf();
+      expect(result).toContain('is_ipv6_enabled = true');
     });
 
     it('should support HTTP/2 and HTTP/3', () => {
       const result = generateCloudfrontTf();
-      expect(result).toContain('http_version = "http2and3"');
+      expect(result).toContain('http_version    = "http2and3"');
     });
   });
 
@@ -78,6 +83,28 @@ describe('generateCloudfrontTf', () => {
     });
   });
 
+  describe('edge client address function', () => {
+    it('should set the edge header to the viewer address, lowercase in function code', () => {
+      const result = generateCloudfrontTf();
+      expect(result).toContain(
+        'resource "aws_cloudfront_function" "edge_client_ip"',
+      );
+      expect(result).toContain('runtime = "cloudfront-js-2.0"');
+      expect(result).toContain(
+        "event.request.headers['x-tsdevstack-edge-ip'] = { value: event.viewer.ip };",
+      );
+      expect(result).toContain('return event.request;');
+    });
+
+    it('should run on the viewer request of the default behavior', () => {
+      const result = generateCloudfrontTf();
+      expect(result).toContain('event_type   = "viewer-request"');
+      expect(result).toContain(
+        'function_arn = aws_cloudfront_function.edge_client_ip.arn',
+      );
+    });
+  });
+
   describe('viewer certificate', () => {
     it('should use ACM certificate when base_domain is set', () => {
       const result = generateCloudfrontTf();
@@ -109,7 +136,7 @@ describe('generateCloudfrontTf', () => {
     it('should use api_domain as alias when base_domain is set', () => {
       const result = generateCloudfrontTf();
       expect(result).toContain(
-        'aliases      = var.base_domain != "" ? [local.api_domain] : []',
+        'aliases         = var.base_domain != "" ? [local.api_domain] : []',
       );
     });
   });

@@ -6,7 +6,8 @@
  * Gateway endpoints for S3/DynamoDB are free.
  *
  * Cloud Map provides DNS-based service discovery inside the VPC:
- * Kong and other services call backends as {service}.{project}.local:8080.
+ * Kong and other services call backends as {service}.{project}.local:8080,
+ * and the Next.js servers call Kong as kong.{project}.local:8080.
  * The ALB only receives external traffic (443, 80 redirect) for Kong and Next.js.
  */
 
@@ -265,7 +266,8 @@ resource "aws_vpc_endpoint" "dynamodb" {
 # =============================================================================
 # Provides DNS-based service discovery for service-to-service calls.
 # Services register as {service-name}.{project-name}.local
-# Kong reaches backend services here (port 8080); services call each other here too.
+# Kong reaches backend services here (port 8080); services call each other here
+# too, and the Next.js servers reach Kong here (kong.{project-name}.local).
 
 resource "aws_service_discovery_private_dns_namespace" "main" {
   name        = "\${var.project_name}.local"
@@ -280,7 +282,7 @@ resource "aws_service_discovery_private_dns_namespace" "main" {
 }
 
 resource "aws_service_discovery_service" "service" {
-  for_each = { for name, cfg in var.services : name => cfg if name != "kong" }
+  for_each = var.services
 
   name = each.key
 

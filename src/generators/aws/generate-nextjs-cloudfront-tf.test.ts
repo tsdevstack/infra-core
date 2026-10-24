@@ -46,10 +46,10 @@ describe('generateNextjsCloudfrontTf', () => {
       expect(result).toContain('cookie_behavior = "all"');
     });
 
-    it('should forward CORS headers', () => {
+    it('should forward CORS headers and the edge client address header', () => {
       const result = generateNextjsCloudfrontTf();
       expect(result).toContain(
-        'items = ["Host", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]',
+        'items = ["Host", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers", "X-Tsdevstack-Edge-IP"]',
       );
     });
   });
@@ -154,10 +154,28 @@ describe('generateNextjsCloudfrontTf', () => {
     });
   });
 
+  describe('edge client address function', () => {
+    it('should run on the dynamic and data behaviors, not on static assets', () => {
+      const result = generateNextjsCloudfrontTf();
+      const associations = result.match(
+        /function_arn = aws_cloudfront_function\.edge_client_ip\.arn/g,
+      );
+      expect(associations).toHaveLength(2);
+      // Static assets and images: no function (an invocation per asset request)
+      const staticBlock = result.slice(
+        result.indexOf('path_pattern           = "/_next/static/*"'),
+        result.indexOf('path_pattern           = "/_next/data/*"'),
+      );
+      expect(staticBlock).not.toContain('function_association');
+    });
+  });
+
   describe('Route 53 records', () => {
-    it('should create A records', () => {
+    it('should create A and AAAA records', () => {
       const result = generateNextjsCloudfrontTf();
       expect(result).toContain('resource "aws_route53_record" "nextjs"');
+      expect(result).toContain('resource "aws_route53_record" "nextjs_ipv6"');
+      expect(result).toContain('type    = "AAAA"');
     });
 
     it('should alias to CloudFront distribution', () => {

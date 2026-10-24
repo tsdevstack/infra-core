@@ -7,7 +7,7 @@
  * - CORS configuration (allow all origins — presigned URLs control access)
  * - Versioning enabled
  * - Lifecycle configuration (expire non-current versions after 7 days)
- * - IAM policy on all ECS task roles for S3 access
+ * - IAM policy on the service task roles for S3 access (not Kong's)
  *
  * force_destroy = true allows Terraform to delete non-empty buckets.
  * WARNING: This is permanent — all objects and versions are deleted, NOT recoverable.
@@ -122,11 +122,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
 }
 
 # =============================================================================
-# IAM — grant S3 access to all ECS task roles
+# IAM — grant S3 access to the service task roles
+# Workers use their service's task role; Kong never touches the buckets
 # =============================================================================
 
 resource "aws_iam_role_policy" "task_s3_storage" {
-  for_each = var.services
+  for_each = { for name, cfg in var.services : name => cfg if name != "kong" }
 
   name = "s3-storage-access"
   role = aws_iam_role.task[each.key].id

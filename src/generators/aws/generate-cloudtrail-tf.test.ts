@@ -29,6 +29,12 @@ describe('generateCloudtrailTf', () => {
       expect(result).toContain('resource "aws_s3_bucket" "cloudtrail"');
     });
 
+    it('should empty the bucket on destroy', () => {
+      expect(result).toContain(
+        'bucket        = "${var.project_name}-cloudtrail-${data.aws_caller_identity.current.account_id}"\n  force_destroy = true',
+      );
+    });
+
     it('should enable versioning', () => {
       expect(result).toContain(
         'resource "aws_s3_bucket_versioning" "cloudtrail"',

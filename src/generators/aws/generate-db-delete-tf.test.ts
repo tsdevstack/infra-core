@@ -23,6 +23,14 @@ describe('generateDbDeleteTf', () => {
       );
     });
 
+    it('should delete the repository with its images on destroy', () => {
+      const result = generateDbDeleteTf();
+
+      expect(result).toContain(
+        'name                 = "${var.project_name}/db-delete"\n  image_tag_mutability = "MUTABLE"\n  force_delete         = true',
+      );
+    });
+
     it('should include ECS task definition', () => {
       const result = generateDbDeleteTf();
 

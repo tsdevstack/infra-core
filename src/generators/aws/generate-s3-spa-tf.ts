@@ -23,7 +23,8 @@ export function generateS3SpaTf(): string {
 resource "aws_s3_bucket" "spa" {
   for_each = var.spa_services
 
-  bucket = "\${var.project_name}-\${each.key}-spa-\${var.aws_account_id}"
+  bucket        = "\${var.project_name}-\${each.key}-spa-\${var.aws_account_id}"
+  force_destroy = true
 
   tags = { Name = "\${var.project_name}-\${each.key}-spa" }
 }
@@ -60,6 +61,7 @@ resource "aws_cloudfront_distribution" "spa" {
   for_each = var.spa_services
 
   enabled             = true
+  is_ipv6_enabled     = true
   web_acl_id          = aws_wafv2_web_acl.main.arn
   default_root_object = "index.html"
   aliases             = [each.value.domain]
@@ -145,7 +147,7 @@ resource "aws_s3_bucket_policy" "spa" {
 }
 
 # =============================================================================
-# Route 53 A Records for SPAs (e.g., app.createdevstack.app -> SPA CloudFront)
+# Route 53 A and AAAA Records for SPAs (e.g., app.createdevstack.app -> SPA CloudFront)
 # =============================================================================
 
 resource "aws_route53_record" "spa" {
@@ -154,6 +156,20 @@ resource "aws_route53_record" "spa" {
   zone_id = data.aws_route53_zone.main[0].zone_id
   name    = each.value.domain
   type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.spa[each.key].domain_name
+    zone_id                = aws_cloudfront_distribution.spa[each.key].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "spa_ipv6" {
+  for_each = var.spa_services
+
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = each.value.domain
+  type    = "AAAA"
 
   alias {
     name                   = aws_cloudfront_distribution.spa[each.key].domain_name

@@ -30,6 +30,11 @@ describe('generateEventbridgeTf', () => {
       expect(result).toContain('"managed-by"   = "tsdevstack"');
     });
 
+    it('should delete the secret without a recovery window', () => {
+      const result = generateEventbridgeTf();
+      expect(result).toContain('recovery_window_in_days = 0');
+    });
+
     it('should create secret version', () => {
       const result = generateEventbridgeTf();
       expect(result).toContain(

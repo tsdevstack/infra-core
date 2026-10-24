@@ -213,14 +213,13 @@ describe('generateNetworkTf', () => {
       expect(result).toContain('name        = "${var.project_name}.local"');
     });
 
-    it('should create service discovery services for non-Kong services', () => {
+    it('should create a service discovery service for every service, Kong included', () => {
       const result = generateNetworkTf();
       expect(result).toContain(
         'resource "aws_service_discovery_service" "service"',
       );
-      expect(result).toContain(
-        'for_each = { for name, cfg in var.services : name => cfg if name != "kong" }',
-      );
+      expect(result).toContain('for_each = var.services');
+      expect(result).not.toContain('if name != "kong"');
     });
 
     it('should use MULTIVALUE routing policy', () => {

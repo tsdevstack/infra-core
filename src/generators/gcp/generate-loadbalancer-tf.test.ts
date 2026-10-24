@@ -34,6 +34,63 @@ describe('generateLoadBalancerTf', () => {
     });
   });
 
+  describe('Client address and IPv6', () => {
+    const result = generateLoadBalancerTf({
+      apiDomain: 'api.example.com',
+      frontendServices: [{ name: 'frontend', domain: 'example.com' }],
+    });
+    const backend = (name: string): string => {
+      const start = result.indexOf(
+        `resource "google_compute_backend_service" "${name}"`,
+      );
+      return result.slice(start, result.indexOf('\n}\n', start));
+    };
+    const header =
+      'custom_request_headers = ["X-Tsdevstack-Edge-IP: {client_ip_address}"]';
+
+    it("should send the client's address to Kong in a header the load balancer sets", () => {
+      expect(backend('kong')).toContain(header);
+    });
+
+    it("should send the client's address to each Next.js app too", () => {
+      expect(backend('frontend')).toContain(header);
+    });
+
+    it('should reserve an IPv6 address and serve HTTPS and the redirect on it', () => {
+      expect(result).toContain(
+        'resource "google_compute_global_address" "lb_ipv6"',
+      );
+      expect(result).toContain('ip_version = "IPV6"');
+
+      const https = result.slice(
+        result.indexOf(
+          'resource "google_compute_global_forwarding_rule" "https_ipv6"',
+        ),
+      );
+      expect(https).toContain(
+        'ip_address = google_compute_global_address.lb_ipv6.address',
+      );
+      expect(https).toContain('port_range = "443"');
+      expect(https).toContain(
+        'target     = google_compute_target_https_proxy.main.id',
+      );
+
+      const redirect = result.slice(
+        result.indexOf(
+          'resource "google_compute_global_forwarding_rule" "http_redirect_ipv6"',
+        ),
+      );
+      expect(redirect).toContain('port_range = "80"');
+      expect(redirect).toContain(
+        'target     = google_compute_target_http_proxy.redirect.id',
+      );
+    });
+
+    it('should output the IPv6 address for the AAAA records', () => {
+      expect(result).toContain('output "load_balancer_ipv6"');
+    });
+  });
+
   describe('with frontend services', () => {
     it('should generate NEGs and backends for each frontend', () => {
       const result = generateLoadBalancerTf({

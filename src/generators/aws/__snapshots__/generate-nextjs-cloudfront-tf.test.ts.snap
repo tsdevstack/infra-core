@@ -64,7 +64,8 @@ resource "aws_cloudfront_cache_policy" "nextjs_images" {
 # Origin Request Policy
 # =============================================================================
 
-# Forward cookies to Next.js for auth
+# Forward cookies to Next.js for auth, and the edge client address header the
+# viewer-request function sets (a whitelist forwards only what it lists)
 resource "aws_cloudfront_origin_request_policy" "nextjs_forward_cookies" {
   count = length(var.nextjs_services) > 0 ? 1 : 0
 
@@ -74,7 +75,7 @@ resource "aws_cloudfront_origin_request_policy" "nextjs_forward_cookies" {
   headers_config {
     header_behavior = "whitelist"
     headers {
-      items = ["Host", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"]
+      items = ["Host", "Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers", "X-Tsdevstack-Edge-IP"]
     }
   }
 
@@ -130,6 +131,12 @@ resource "aws_cloudfront_distribution" "nextjs" {
     cache_policy_id            = aws_cloudfront_cache_policy.nextjs_dynamic[0].id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.nextjs_forward_cookies[0].id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
+
+    # The visitor's address for the server-side calls to Kong (see cloudfront.tf)
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.edge_client_ip.arn
+    }
   }
 
   # Static assets - immutable, cache forever
@@ -176,6 +183,12 @@ resource "aws_cloudfront_distribution" "nextjs" {
 
     cache_policy_id          = aws_cloudfront_cache_policy.nextjs_dynamic[0].id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.nextjs_forward_cookies[0].id
+
+    # Server-side data fetches may call Kong for the visitor too
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.edge_client_ip.arn
+    }
   }
 
   logging_config {
@@ -206,8 +219,10 @@ resource "aws_cloudfront_distribution" "nextjs" {
 }
 
 # =============================================================================
-# Route 53 A Records for Next.js
+# Route 53 A and AAAA Records for Next.js
 # =============================================================================
+# The distribution has IPv6 enabled, so it needs both alias records (Route 53
+# docs: "one to route IPv4 traffic to the distribution, and one to route IPv6")
 
 resource "aws_route53_record" "nextjs" {
   for_each = var.base_domain != "" ? var.nextjs_services : {}
@@ -215,6 +230,20 @@ resource "aws_route53_record" "nextjs" {
   zone_id = data.aws_route53_zone.main[0].zone_id
   name    = each.value.domain
   type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.nextjs[each.key].domain_name
+    zone_id                = aws_cloudfront_distribution.nextjs[each.key].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "nextjs_ipv6" {
+  for_each = var.base_domain != "" ? var.nextjs_services : {}
+
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = each.value.domain
+  type    = "AAAA"
 
   alias {
     name                   = aws_cloudfront_distribution.nextjs[each.key].domain_name

@@ -29,6 +29,8 @@ const baseConfig: AzureInfraConfig = {
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',
   nextjsAppServiceSku: 'B1',
+  kongScaling: { instances: 1, autoscaleMax: null },
+  nextjsScaling: { instances: 1, autoscaleMax: null },
 };
 
 describe('generateDnsTf', () => {
@@ -213,6 +215,48 @@ describe('generateDnsTf', () => {
       expect(result).not.toContain(
         'resource "azurerm_dns_cname_record" "nextjs_frontend"',
       );
+    });
+
+    it('should also create an alias AAAA record for IPv6 visitors at the apex', () => {
+      const result = generateDnsTf({
+        ...baseConfig,
+        baseDomain: 'example.com',
+        frontends: {
+          frontend: {
+            domain: 'example.com',
+            cpu: 0.5,
+            memory: '1Gi',
+            minInstances: 1,
+            maxInstances: 5,
+          },
+        },
+      });
+      const aaaa = result.slice(
+        result.indexOf('resource "azurerm_dns_aaaa_record" "nextjs_frontend"'),
+      );
+
+      expect(aaaa).toContain('name                = "@"');
+      expect(aaaa).toContain(
+        'target_resource_id = azurerm_cdn_frontdoor_endpoint.nextjs_frontend.id',
+      );
+    });
+
+    it('should not create an AAAA record for a subdomain (its CNAME covers IPv6)', () => {
+      const result = generateDnsTf({
+        ...baseConfig,
+        baseDomain: 'example.com',
+        frontends: {
+          frontend: {
+            domain: 'www.example.com',
+            cpu: 0.5,
+            memory: '1Gi',
+            minInstances: 1,
+            maxInstances: 5,
+          },
+        },
+      });
+
+      expect(result).not.toContain('azurerm_dns_aaaa_record');
     });
 
     it('should use _dnsauth without subdomain for apex domain validation', () => {

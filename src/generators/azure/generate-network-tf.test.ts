@@ -68,6 +68,25 @@ describe('generateNetworkTf', () => {
         'name    = "Microsoft.DBforPostgreSQL/flexibleServers"',
       );
     });
+
+    it('should declare the Microsoft.Storage endpoint Azure adds with the first server', () => {
+      const result = generateNetworkTf();
+      const postgresStart = result.indexOf(
+        'resource "azurerm_subnet" "postgres"',
+      );
+      const postgresEnd = result.indexOf(
+        'resource "azurerm_subnet" "private_endpoints"',
+      );
+      const postgresBlock = result.slice(postgresStart, postgresEnd);
+      expect(postgresBlock).toContain(
+        'service_endpoints    = ["Microsoft.Storage"]',
+      );
+    });
+
+    it('should not add service endpoints to the other subnets', () => {
+      const result = generateNetworkTf();
+      expect(result.match(/service_endpoints/g)).toHaveLength(1);
+    });
   });
 
   describe('Private endpoints subnet', () => {

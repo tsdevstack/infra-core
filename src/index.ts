@@ -28,6 +28,7 @@ export type {
   WafConfig,
   BaseInfraConfig,
   AzureInfraConfig,
+  AppServicePlanScaling,
   AWSInfraConfig,
   GCPInfraConfig,
   InfraConfig,
@@ -78,6 +79,7 @@ export {
   extractLockId,
   extractImportTargets,
   detectRouteAssociationError,
+  isCapacityOnlyFailure,
   extractCnameConflicts,
 } from './terraform/index.ts';
 export type {
@@ -235,7 +237,22 @@ export { toServiceEnvVarName } from './utils/credentials/to-service-env-var-name
 export { fromServiceEnvVarName } from './utils/credentials/from-service-env-var-name.ts';
 
 // Constants
-export { MIME_TYPES } from './constants/index.ts';
+export {
+  MIME_TYPES,
+  CLOUD_CAPACITY_ERROR_PATTERNS,
+  AZURE_APP_SERVICE_AUTOSCALE,
+  AZURE_APP_SERVICE_HEALTH_CHECK,
+  AZURE_KONG_CLIENT_IP_SETTINGS,
+  AZURE_NEXTJS_CLIENT_IP_SETTINGS,
+  AZURE_KONG_PRIVATE_ENDPOINT,
+  GCP_EDGE_CLIENT_IP_HEADER,
+  GCP_KONG_CLIENT_IP_SETTINGS,
+  GCP_NEXTJS_CLIENT_IP_SETTINGS,
+  EDGE_CLIENT_IP_HEADER,
+  AWS_KONG_CLIENT_IP_SETTINGS,
+  AWS_NEXTJS_CLIENT_IP_SETTINGS,
+  AWS_KONG_CLOUD_MAP_NAME,
+} from './constants/index.ts';
 export {
   GCP_DATABASE_CONNECTION_LIMITS,
   DEFAULT_DATABASE_TIER,

@@ -7,17 +7,41 @@ exports[`generateCloudfrontTf > snapshot > should match snapshot 1`] = `
 # CDN with WAF protection at edge (CLOUDFRONT scope, us-east-1).
 
 # =============================================================================
+# Edge client address function
+# =============================================================================
+# Runs on every viewer request of the API and Next.js distributions and sets
+# X-Tsdevstack-Edge-IP to the viewer's address (event.viewer.ip), replacing
+# a client-sent value. Kong reads it as the client address for its per-client
+# limits (KONG_REAL_IP_HEADER); the Next.js servers read it as the visitor
+# they name to Kong (TSDEVSTACK_CLIENT_IP_HEADER). X-Forwarded-For cannot be
+# used: CloudFront appends the viewer and the ALB appends CloudFront's edge.
+
+resource "aws_cloudfront_function" "edge_client_ip" {
+  name    = "\${var.project_name}-\${var.environment}-edge-client-ip"
+  runtime = "cloudfront-js-2.0"
+  comment = "Set X-Tsdevstack-Edge-IP to the viewer's address"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      event.request.headers['x-tsdevstack-edge-ip'] = { value: event.viewer.ip };
+      return event.request;
+    }
+  EOF
+}
+
+# =============================================================================
 # CloudFront Distribution
 # =============================================================================
 
 resource "aws_cloudfront_distribution" "main" {
-  enabled      = true
-  web_acl_id   = aws_wafv2_web_acl.main.arn
+  enabled         = true
+  is_ipv6_enabled = true
+  web_acl_id      = aws_wafv2_web_acl.main.arn
   # API domain derived from base_domain (e.g., api.example.com)
   # Wildcard cert covers *.example.com including api.example.com
-  aliases      = var.base_domain != "" ? [local.api_domain] : []
-  price_class  = "PriceClass_100"
-  http_version = "http2and3"
+  aliases         = var.base_domain != "" ? [local.api_domain] : []
+  price_class     = "PriceClass_100"
+  http_version    = "http2and3"
 
   # Origin: ALB (Kong handles all routing and failover)
   origin {
@@ -47,8 +71,15 @@ resource "aws_cloudfront_distribution" "main" {
 
     # No caching for API - all requests go to origin
     cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"  # CachingDisabled
+    # AllViewer: every viewer header reaches the origin, the edge client
+    # address header included
     origin_request_policy_id   = "216adef6-5c7f-47e4-b989-5492eafa07d3"  # AllViewer
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.edge_client_ip.arn
+    }
   }
 
   # Use ACM cert if base_domain is set, otherwise CloudFront default cert

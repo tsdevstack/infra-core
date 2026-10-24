@@ -72,10 +72,10 @@ db_instance_class            = "${database.tier}"
 database_storage_size        = ${database.storageSizeGb}
 database_deletion_protection = ${database.deletionProtection}
 database_backup              = ${database.backup}
+database_ha                  = ${database.ha ?? false}
 
 # Redis (ElastiCache)
-redis_node_type         = "${redis.tier}"
-redis_high_availability = ${redis.highAvailability ?? false}
+redis_node_type = "${redis.tier}"
 `;
 }
 

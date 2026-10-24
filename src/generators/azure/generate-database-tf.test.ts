@@ -33,6 +33,8 @@ const baseConfig: AzureInfraConfig = {
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',
   nextjsAppServiceSku: 'B1',
+  kongScaling: { instances: 1, autoscaleMax: null },
+  nextjsScaling: { instances: 1, autoscaleMax: null },
 };
 
 describe('generateDatabaseTf', () => {
@@ -136,6 +138,39 @@ describe('generateDatabaseTf', () => {
       expect(result).toContain(
         'ignore_changes = [zone, high_availability[0].standby_availability_zone]',
       );
+    });
+  });
+
+  describe('high availability', () => {
+    it('should not add a high_availability block by default', () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).not.toContain('high_availability {');
+    });
+
+    it('should add a zone-redundant standby when ha is true', () => {
+      const result = generateDatabaseTf({
+        ...baseConfig,
+        database: {
+          ...baseConfig.database,
+          tier: 'GP_Standard_D2s_v3',
+          ha: true,
+        },
+      });
+      expect(result).toContain(
+        '  high_availability {\n    mode = "ZoneRedundant"\n  }',
+      );
+    });
+
+    it('should keep the rest of the server block unchanged when ha is true', () => {
+      const withHa = generateDatabaseTf({
+        ...baseConfig,
+        database: { ...baseConfig.database, ha: true },
+      });
+      const withoutBlock = withHa.replace(
+        '\n  high_availability {\n    mode = "ZoneRedundant"\n  }\n',
+        '',
+      );
+      expect(withoutBlock).toBe(generateDatabaseTf(baseConfig));
     });
   });
 

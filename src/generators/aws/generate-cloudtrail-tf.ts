@@ -84,7 +84,8 @@ resource "aws_kms_alias" "cloudtrail" {
 # =============================================================================
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket = "\${var.project_name}-cloudtrail-\${data.aws_caller_identity.current.account_id}"
+  bucket        = "\${var.project_name}-cloudtrail-\${data.aws_caller_identity.current.account_id}"
+  force_destroy = true
 
   tags = { Name = "\${var.project_name}-cloudtrail-logs" }
 }

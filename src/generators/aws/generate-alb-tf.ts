@@ -45,6 +45,7 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
+  # infra:destroy turns this off before terraform destroy runs
   enable_deletion_protection = true
 
   access_logs {

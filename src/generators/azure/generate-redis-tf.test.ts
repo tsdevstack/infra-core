@@ -29,6 +29,8 @@ const baseConfig: AzureInfraConfig = {
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',
   nextjsAppServiceSku: 'B1',
+  kongScaling: { instances: 1, autoscaleMax: null },
+  nextjsScaling: { instances: 1, autoscaleMax: null },
 };
 
 describe('generateRedisTf', () => {
@@ -57,6 +59,11 @@ describe('generateRedisTf', () => {
         result.indexOf('resource "azurerm_private_endpoint" "redis"'),
       );
       expect(redisBlock).toContain('tags                = local.tags');
+    });
+
+    it('should disable public network access (private endpoint only)', () => {
+      const result = generateRedisTf(baseConfig);
+      expect(result).toContain('public_network_access = "Disabled"');
     });
 
     it('should include default_database block with access keys enabled', () => {

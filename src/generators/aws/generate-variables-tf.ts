@@ -150,6 +150,12 @@ variable "database_backup" {
   default     = true
 }
 
+variable "database_ha" {
+  description = "Multi-AZ deployment with a standby in another Availability Zone"
+  type        = bool
+  default     = false
+}
+
 # ─────────────────────────────────────────
 # Redis (ElastiCache)
 # ─────────────────────────────────────────
@@ -158,12 +164,6 @@ variable "redis_node_type" {
   description = "ElastiCache node type (e.g., cache.t3.micro, cache.t3.small)"
   type        = string
   default     = "cache.t3.micro"
-}
-
-variable "redis_high_availability" {
-  description = "Enable Multi-AZ with automatic failover"
-  type        = bool
-  default     = false
 }
 
 # ─────────────────────────────────────────

@@ -15,6 +15,13 @@ describe('generateDbInitTf', () => {
       );
     });
 
+    it('should delete the repository with its images on destroy', () => {
+      const result = generateDbInitTf();
+      expect(result).toContain(
+        'name                 = "${var.project_name}/db-init"\n  image_tag_mutability = "MUTABLE"\n  force_delete         = true',
+      );
+    });
+
     it('should enable scan on push', () => {
       const result = generateDbInitTf();
       expect(result).toContain('scan_on_push = true');

@@ -118,7 +118,9 @@ describe('generateS3StorageTf', () => {
       expect(result).toContain(
         'resource "aws_iam_role_policy" "task_s3_storage"',
       );
-      expect(result).toContain('for_each = var.services');
+      expect(result).toContain(
+        'for_each = { for name, cfg in var.services : name => cfg if name != "kong" }',
+      );
     });
 
     it('should grant required S3 actions', () => {

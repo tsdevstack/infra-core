@@ -38,10 +38,15 @@ resource "google_sql_database" "${toTerraformId(service.name)}" {
       const varSuffix = toTfVarSuffix(service.name);
       return `
 # Database user for ${service.name}
+# ABANDON: on destroy Terraform drops the user from its state instead of
+# deleting it; deleting the instance removes it. Terraform deletes users in
+# parallel with their databases, and Postgres refuses to drop a role that
+# still owns objects. The provider documents ABANDON for Postgres users.
 resource "google_sql_user" "${tfId}_user" {
-  name     = "${service.name}"
-  instance = google_sql_database_instance.postgres.name
-  password = var.db_${varSuffix}_password
+  name            = "${service.name}"
+  instance        = google_sql_database_instance.postgres.name
+  password        = var.db_${varSuffix}_password
+  deletion_policy = "ABANDON"
 }`;
     })
     .join('\n');

@@ -19,6 +19,9 @@ resource "azurerm_managed_redis" "main" {
   sku_name            = "${config.redis.tier}"
   tags                = local.tags
 
+  # Reachable only through the private endpoint below
+  public_network_access = "Disabled"
+
   default_database {
     access_keys_authentication_enabled = true
     clustering_policy                  = "EnterpriseCluster"

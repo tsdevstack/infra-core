@@ -29,6 +29,8 @@ const baseConfig: AzureInfraConfig = {
   frontdoorPremium: false,
   kongAppServiceSku: 'B1',
   nextjsAppServiceSku: 'B1',
+  kongScaling: { instances: 1, autoscaleMax: null },
+  nextjsScaling: { instances: 1, autoscaleMax: null },
 };
 
 describe('generateOutputsTf', () => {
@@ -232,6 +234,30 @@ describe('generateOutputsTf', () => {
     it('should include App Service section header', () => {
       const result = generateOutputsTf(baseConfig);
       expect(result).toContain('# App Service');
+    });
+
+    it("should output Kong's default host name as kong_internal_url with Next.js apps", () => {
+      const result = generateOutputsTf({
+        ...baseConfig,
+        frontends: {
+          frontend: {
+            domain: '',
+            cpu: 0.5,
+            memory: '1Gi',
+            minInstances: 1,
+            maxInstances: 1,
+          },
+        },
+      });
+      expect(result).toContain('output "kong_internal_url"');
+      expect(result).toContain(
+        'value       = "https://${azurerm_linux_web_app.kong.default_hostname}"',
+      );
+    });
+
+    it('should not output kong_internal_url without Next.js apps', () => {
+      const result = generateOutputsTf(baseConfig);
+      expect(result).not.toContain('kong_internal_url');
     });
   });
 });

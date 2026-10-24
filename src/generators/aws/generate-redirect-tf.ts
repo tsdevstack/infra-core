@@ -113,11 +113,12 @@ resource "aws_cloudfront_function" "redirect_${tfId}" {
 
 # CloudFront distribution for ${domain} redirect
 resource "aws_cloudfront_distribution" "redirect_${tfId}" {
-  enabled      = true
-  web_acl_id   = aws_wafv2_web_acl.main.arn
-  aliases      = ["${domain}", "*.${domain}"]
-  price_class  = "PriceClass_100"
-  comment      = "\${var.project_name}-\${var.environment}-redirect-${tfId}"
+  enabled         = true
+  is_ipv6_enabled = true
+  web_acl_id      = aws_wafv2_web_acl.main.arn
+  aliases         = ["${domain}", "*.${domain}"]
+  price_class     = "PriceClass_100"
+  comment         = "\${var.project_name}-\${var.environment}-redirect-${tfId}"
 
   origin {
     domain_name = "${canonicalDomain}"
@@ -185,6 +186,31 @@ resource "aws_route53_record" "redirect_wildcard_${tfId}" {
   zone_id = data.aws_route53_zone.redirect_${tfId}.zone_id
   name    = "*.${domain}"
   type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.redirect_${tfId}.domain_name
+    zone_id                = aws_cloudfront_distribution.redirect_${tfId}.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# Route 53 AAAA records: the same two names over IPv6
+resource "aws_route53_record" "redirect_${tfId}_ipv6" {
+  zone_id = data.aws_route53_zone.redirect_${tfId}.zone_id
+  name    = "${domain}"
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.redirect_${tfId}.domain_name
+    zone_id                = aws_cloudfront_distribution.redirect_${tfId}.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "redirect_wildcard_${tfId}_ipv6" {
+  zone_id = data.aws_route53_zone.redirect_${tfId}.zone_id
+  name    = "*.${domain}"
+  type    = "AAAA"
 
   alias {
     name                   = aws_cloudfront_distribution.redirect_${tfId}.domain_name

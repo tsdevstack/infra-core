@@ -181,14 +181,21 @@ describe('generateDatabaseTf', () => {
       );
     });
 
+    it('should abandon users on destroy (Postgres refuses to drop a role that owns objects)', () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).toMatch(
+        /resource "google_sql_user" "auth_service_user" \{[^}]*deletion_policy = "ABANDON"/,
+      );
+    });
+
     it('should use service name for user name', () => {
       const result = generateDatabaseTf(baseConfig);
-      expect(result).toContain('name     = "auth-service"');
+      expect(result).toContain('name            = "auth-service"');
     });
 
     it('should use password variable from Secret Manager', () => {
       const result = generateDatabaseTf(baseConfig);
-      expect(result).toContain('password = var.db_auth_password');
+      expect(result).toContain('password        = var.db_auth_password');
     });
 
     it('should include comment about password sources', () => {

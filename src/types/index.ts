@@ -23,6 +23,7 @@ export type {
   WafConfig,
   BaseInfraConfig,
   AzureInfraConfig,
+  AppServicePlanScaling,
   AWSInfraConfig,
   GCPInfraConfig,
   InfraConfig,

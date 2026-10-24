@@ -24,6 +24,7 @@ export function generateDbInitTf(): string {
 resource "aws_ecr_repository" "db_init" {
   name                 = "\${var.project_name}/db-init"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true

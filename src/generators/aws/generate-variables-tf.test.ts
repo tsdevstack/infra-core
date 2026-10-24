@@ -106,6 +106,11 @@ describe('generateVariablesTf', () => {
       const result = generateVariablesTf([]);
       expect(result).toContain('variable "database_backup"');
     });
+
+    it('should define database_ha with default false', () => {
+      const result = generateVariablesTf([]);
+      expect(result).toContain('variable "database_ha"');
+    });
   });
 
   describe('redis variables', () => {
@@ -115,10 +120,9 @@ describe('generateVariablesTf', () => {
       expect(result).toContain('default     = "cache.t3.micro"');
     });
 
-    it('should define redis_high_availability with default false', () => {
+    it('should not define redis_high_availability (Redis runs one node)', () => {
       const result = generateVariablesTf([]);
-      expect(result).toContain('variable "redis_high_availability"');
-      expect(result).toContain('default     = false');
+      expect(result).not.toContain('variable "redis_high_availability"');
     });
   });
 

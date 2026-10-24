@@ -105,11 +105,33 @@ describe('generateGcsStorageTf', () => {
     it('should grant serviceAccountTokenCreator for presigned URLs', () => {
       const result = generateGcsStorageTf(baseConfig);
       expect(result).toContain(
-        'resource "google_project_iam_member" "storage_token_creator"',
+        'resource "google_service_account_iam_member" "storage_token_creator"',
       );
       expect(result).toContain(
-        'role    = "roles/iam.serviceAccountTokenCreator"',
+        'role               = "roles/iam.serviceAccountTokenCreator"',
       );
+    });
+
+    it('should grant token creator on each service account, not the project', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain(
+        'service_account_id = google_service_account.runtime[each.key].name',
+      );
+      expect(result).toContain(
+        'member             = "serviceAccount:${google_service_account.runtime[each.key].email}"',
+      );
+      expect(result).not.toContain('google_project_iam_member');
+    });
+
+    it('should enable the Service Account Credentials API and keep it on destroy', () => {
+      const result = generateGcsStorageTf(baseConfig);
+      expect(result).toContain(
+        'resource "google_project_service" "iamcredentials"',
+      );
+      expect(result).toContain(
+        'service            = "iamcredentials.googleapis.com"',
+      );
+      expect(result).toContain('disable_on_destroy = false');
     });
 
     it('should iterate over local.services for token creator role', () => {

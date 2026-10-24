@@ -12,7 +12,14 @@ describe('generateS3SpaTf', () => {
     it('should use project name and service name in bucket name', () => {
       const result = generateS3SpaTf();
       expect(result).toContain(
-        'bucket = "${var.project_name}-${each.key}-spa-${var.aws_account_id}"',
+        'bucket        = "${var.project_name}-${each.key}-spa-${var.aws_account_id}"',
+      );
+    });
+
+    it('should empty the bucket on destroy', () => {
+      const result = generateS3SpaTf();
+      expect(result).toContain(
+        'bucket        = "${var.project_name}-${each.key}-spa-${var.aws_account_id}"\n  force_destroy = true',
       );
     });
   });
@@ -122,9 +129,11 @@ describe('generateS3SpaTf', () => {
   });
 
   describe('Route 53 records', () => {
-    it('should create A records for SPAs', () => {
+    it('should create A and AAAA records for SPAs', () => {
       const result = generateS3SpaTf();
       expect(result).toContain('resource "aws_route53_record" "spa"');
+      expect(result).toContain('resource "aws_route53_record" "spa_ipv6"');
+      expect(result).toContain('is_ipv6_enabled     = true');
     });
 
     it('should alias to CloudFront distribution', () => {

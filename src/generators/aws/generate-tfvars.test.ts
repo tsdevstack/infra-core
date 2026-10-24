@@ -17,7 +17,7 @@ describe('generateTfvars', () => {
       deletionProtection: false,
       backup: false,
     },
-    redis: { tier: 'cache.t3.micro', highAvailability: false },
+    redis: { tier: 'cache.t3.micro' },
     servicesWithDatabase: [],
     baseDomain: 'example.com',
     services: {},
@@ -242,26 +242,31 @@ describe('generateTfvars', () => {
       const result = generateTfvars(baseConfig);
       expect(result).toContain('database_backup              = false');
     });
+
+    it('should default database_ha to false', () => {
+      const result = generateTfvars(baseConfig);
+      expect(result).toContain('database_ha                  = false');
+    });
+
+    it('should enable database_ha when configured', () => {
+      const config: AWSInfraConfig = {
+        ...baseConfig,
+        database: { ...baseConfig.database, ha: true },
+      };
+      const result = generateTfvars(config);
+      expect(result).toContain('database_ha                  = true');
+    });
   });
 
   describe('redis settings', () => {
     it('should set redis node type', () => {
       const result = generateTfvars(baseConfig);
-      expect(result).toContain('redis_node_type         = "cache.t3.micro"');
+      expect(result).toContain('redis_node_type = "cache.t3.micro"');
     });
 
-    it('should set high availability', () => {
+    it('should not write the removed redis_high_availability variable', () => {
       const result = generateTfvars(baseConfig);
-      expect(result).toContain('redis_high_availability = false');
-    });
-
-    it('should enable HA when configured', () => {
-      const config: AWSInfraConfig = {
-        ...baseConfig,
-        redis: { tier: 'cache.t3.small', highAvailability: true },
-      };
-      const result = generateTfvars(config);
-      expect(result).toContain('redis_high_availability = true');
+      expect(result).not.toContain('redis_high_availability');
     });
   });
 
