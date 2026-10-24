@@ -46,7 +46,7 @@ describe('deployWithActivationCheck', () => {
   };
 
   beforeEach(() => {
-    rs.restoreAllMocks();
+    rs.clearAllMocks();
     rs.mocked(createOrUpdateContainerApp).mockResolvedValue({
       fqdn: 'test-app.eastus.azurecontainerapps.io',
     });

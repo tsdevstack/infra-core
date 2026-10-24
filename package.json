@@ -21,7 +21,7 @@
     "devops"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.15.0"
   },
   "type": "module",
   "exports": {
@@ -50,22 +50,22 @@
     "@aws-sdk/client-ecr": "^3.984.0",
     "@aws-sdk/client-ecs": "^3.984.0",
     "@aws-sdk/client-s3": "^3.984.0",
-    "@azure/arm-appcontainers": "^3.0.0",
-    "@azure/arm-storage": "^20.1.0",
-    "@azure/identity": "^4.13.0",
+    "@azure/arm-appcontainers": "^4.0.0",
+    "@azure/arm-storage": "^21.0.0",
+    "@azure/identity": "^4.14.0",
     "@azure/storage-blob": "^12.31.0",
-    "@google-cloud/logging": "^11.0.0",
-    "@google-cloud/run": "^3.0.1",
-    "@google-cloud/storage": "^7.18.0",
-    "google-auth-library": "^10.5.0",
-    "googleapis": "^173.0.0"
+    "@google-cloud/logging": "^12.3.0",
+    "@google-cloud/run": "^4.2.0",
+    "@google-cloud/storage": "^8.4.0",
+    "google-auth-library": "^11.3.1",
+    "googleapis": "^188.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@rslib/core": "^0.23.2",
-    "@rstest/adapter-rslib": "^0.11.4",
-    "@rstest/core": "^0.11.4",
-    "@types/node": "^22.19.17",
+    "@rslib/core": "^1.0.4",
+    "@rstest/adapter-rslib": "^0.12.4",
+    "@rstest/core": "^0.12.4",
+    "@types/node": "^24.19.2",
     "eslint": "^10.7.0",
     "globals": "^17.3.0",
     "prettier": "^3.8.1",
