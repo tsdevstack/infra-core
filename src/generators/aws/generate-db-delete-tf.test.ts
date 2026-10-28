@@ -67,5 +67,13 @@ describe('generateDbDeleteTf', () => {
         'aws_secretsmanager_secret.db_master_password.arn',
       );
     });
+
+    it('should use the database tasks execution role', () => {
+      const result = generateDbDeleteTf();
+
+      expect(result).toContain(
+        'execution_role_arn       = aws_iam_role.db_tasks_execution.arn',
+      );
+    });
   });
 });

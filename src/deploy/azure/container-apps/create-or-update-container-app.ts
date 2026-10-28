@@ -42,6 +42,11 @@ export interface CreateOrUpdateContainerAppOptions {
   acrLoginServer?: string;
   /** User-assigned managed identity resource ID for ACR pull (preferred over password auth) */
   acrManagedIdentityId?: string;
+  /**
+   * The service's own Key Vault identity (resource ID), attached next to the
+   * shared one; the app selects it with AZURE_SECRETS_CLIENT_ID
+   */
+  secretsIdentityId?: string;
 }
 
 export interface CreateOrUpdateContainerAppResult {
@@ -70,6 +75,7 @@ export async function createOrUpdateContainerApp(
     externalIngress = false,
     acrLoginServer,
     acrManagedIdentityId,
+    secretsIdentityId,
   } = options;
 
   const credential = createAzureCredential(runtime, credentials);
@@ -112,8 +118,19 @@ export async function createOrUpdateContainerApp(
     acrManagedIdentityId,
     credentials,
   });
-  const { registries, identity } = acrAuth;
+  const { registries } = acrAuth;
   allSecrets.push(...acrAuth.secrets);
+
+  // The service's Key Vault identity joins the shared one
+  const identity = secretsIdentityId
+    ? {
+        type: 'UserAssigned' as const,
+        userAssignedIdentities: {
+          ...(acrAuth.identity?.userAssignedIdentities ?? {}),
+          [secretsIdentityId]: {},
+        },
+      }
+    : acrAuth.identity;
 
   const secretsConfig = allSecrets.length > 0 ? allSecrets : undefined;
 

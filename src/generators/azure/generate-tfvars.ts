@@ -2,6 +2,7 @@
  * Generate terraform.tfvars with actual values for Azure
  */
 
+import { toHclStringMap } from '../../utils/terraform/to-hcl-string-map.ts';
 import type { AzureInfraConfig } from '../../types/config.ts';
 
 export function generateTfvars(config: AzureInfraConfig): string {
@@ -14,6 +15,8 @@ export function generateTfvars(config: AzureInfraConfig): string {
     kongAppServiceSku,
     nextjsAppServiceSku,
     scheduledJobs,
+    keyVaultName,
+    serviceKeyVaults,
   } = config;
 
   const scheduledJobsHcl = formatScheduledJobsMap(scheduledJobs);
@@ -28,6 +31,10 @@ subscription_id        = "${subscriptionId}"
 base_domain            = "${baseDomain}"
 kong_app_service_sku   = "${kongAppServiceSku}"
 nextjs_app_service_sku = "${nextjsAppServiceSku}"
+
+# Key Vaults: the shared one and each backend service's own
+key_vault_name     = "${keyVaultName}"
+service_key_vaults = ${toHclStringMap(serviceKeyVaults)}
 
 # Scheduled Jobs
 scheduled_jobs = ${scheduledJobsHcl}

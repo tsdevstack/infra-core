@@ -9,6 +9,8 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  keyVaultName: 'myproject-dev-kv',
+  serviceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -202,6 +204,14 @@ describe('generateOutputsTf', () => {
   });
 
   describe('App Service outputs', () => {
+    it("should output Kong's identity for its Key Vault access", () => {
+      const result = generateOutputsTf(baseConfig);
+      expect(result).toContain('output "kong_principal_id"');
+      expect(result).toContain(
+        'value       = azurerm_linux_web_app.kong.identity[0].principal_id',
+      );
+    });
+
     it('should always output kong_app_service_name', () => {
       const result = generateOutputsTf(baseConfig);
       expect(result).toContain('output "kong_app_service_name"');
@@ -258,6 +268,15 @@ describe('generateOutputsTf', () => {
     it('should not output kong_internal_url without Next.js apps', () => {
       const result = generateOutputsTf(baseConfig);
       expect(result).not.toContain('kong_internal_url');
+    });
+  });
+  describe('service secrets identities', () => {
+    it("should output each service's identity ID and client ID", () => {
+      const result = generateOutputsTf(baseConfig);
+      expect(result).toContain('output "service_secrets_identities"');
+      expect(result).toContain(
+        'name => { id = identity.id, client_id = identity.client_id }',
+      );
     });
   });
 });

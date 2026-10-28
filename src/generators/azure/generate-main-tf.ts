@@ -62,7 +62,7 @@ data "azurerm_resource_group" "main" {
 # =============================================================================
 
 data "azurerm_key_vault" "main" {
-  name                = "\${var.project_name}-\${var.environment}-kv"
+  name                = var.key_vault_name
   resource_group_name = data.azurerm_resource_group.main.name
 }
 

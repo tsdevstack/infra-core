@@ -5,6 +5,11 @@
  * user-assigned identity that exists before the first Container App deploy.
  * App Service uses system-assigned identity (created by Terraform), but
  * Container Apps can't do that since they're managed externally.
+ *
+ * Each backend service also gets its own identity for Key Vault: the shared
+ * vault and its own vault only. The shared identity reaches only shared
+ * things (registry, shared vault, buckets), and every Container App carries
+ * it, so it never gets a service vault.
  */
 
 export function generateContainerAppsIdentityTf(): string {
@@ -32,6 +37,41 @@ resource "azurerm_role_assignment" "container_apps_keyvault_secrets" {
   scope                            = data.azurerm_key_vault.main.id
   role_definition_name             = "Key Vault Secrets User"
   principal_id                     = azurerm_user_assigned_identity.container_apps.principal_id
+  skip_service_principal_aad_check = true
+}
+
+# =============================================================================
+# Per-service secrets identities
+# A backend service reads Key Vault with its own identity (AZURE_SECRETS_CLIENT_ID):
+# the shared vault and its own vault, never another service's.
+# =============================================================================
+
+resource "azurerm_user_assigned_identity" "service_secrets" {
+  for_each = var.service_key_vaults
+
+  name                = "\${var.project_name}-\${var.environment}-\${each.key}-secrets"
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  tags                = local.tags
+}
+
+resource "azurerm_role_assignment" "service_secrets_shared_vault" {
+  for_each = var.service_key_vaults
+
+  scope                            = data.azurerm_key_vault.main.id
+  role_definition_name             = "Key Vault Secrets User"
+  principal_id                     = azurerm_user_assigned_identity.service_secrets[each.key].principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "service_secrets_own_vault" {
+  for_each = var.service_key_vaults
+
+  # The CLI creates the vault before Terraform runs; referenced by ID so
+  # infra:plan works before it exists
+  scope                            = "\${data.azurerm_resource_group.main.id}/providers/Microsoft.KeyVault/vaults/\${each.value}"
+  role_definition_name             = "Key Vault Secrets User"
+  principal_id                     = azurerm_user_assigned_identity.service_secrets[each.key].principal_id
   skip_service_principal_aad_check = true
 }
 `;

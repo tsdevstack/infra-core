@@ -164,24 +164,81 @@ describe('generateIamTf', () => {
       expect(result).toContain('display_name = "Runtime SA for Kong Gateway"');
     });
 
-    it('should create Kong secret access IAM binding', () => {
+    it('should give Kong no secret access without runtime secrets', () => {
       const result = generateIamTf(singleService);
-      expect(result).toContain(
-        'resource "google_project_iam_member" "kong_secrets"',
-      );
-    });
-
-    it('should grant Kong secretmanager.secretAccessor role', () => {
-      const result = generateIamTf(singleService);
-      expect(result).toContain(
+      expect(result).not.toContain('kong_secrets');
+      expect(result).not.toContain(
         'member  = "serviceAccount:${google_service_account.kong.email}"',
       );
     });
 
-    it('should include Kong condition for shared secrets only', () => {
-      const result = generateIamTf(singleService);
-      expect(result).toContain('title       = "kong-shared-secrets-only"');
-      expect(result).toContain('Allow Kong to access shared secrets only');
+    it('should let Kong read exactly the secrets it reads at startup', () => {
+      const result = generateIamTf(singleService, [
+        'REDIS_PASSWORD',
+        'KONG_TRUST_TOKEN',
+      ]);
+      const secret = (key: string) =>
+        `projects/\${data.google_project.current.number}/secrets/\${var.project_name}-shared-${key}`;
+
+      expect(result).toContain(
+        'resource "google_project_iam_member" "kong_secrets"',
+      );
+      expect(result).toContain(
+        'member  = "serviceAccount:${google_service_account.kong.email}"',
+      );
+      expect(result).toContain(
+        `expression  = "resource.name == \\"${secret('REDIS_PASSWORD')}\\" || resource.name.startsWith(\\"${secret('REDIS_PASSWORD')}/\\") || ` +
+          `resource.name == \\"${secret('KONG_TRUST_TOKEN')}\\" || resource.name.startsWith(\\"${secret('KONG_TRUST_TOKEN')}/\\")"`,
+      );
+      // No prefix match on the shared scope: only these secrets are readable
+      const kongBinding = result.slice(result.indexOf('"kong_secrets"'));
+      expect(kongBinding).not.toContain('-shared-\\")');
+    });
+
+    it("should leave the services' bindings unchanged", () => {
+      const without = generateIamTf(singleService);
+      const withKong = generateIamTf(singleService, ['REDIS_PASSWORD']);
+
+      expect(withKong.startsWith(without)).toBe(true);
+    });
+  });
+
+  describe('overlapping service names', () => {
+    it('should not add exclusions when no name covers another', () => {
+      const result = generateIamTf(multipleServices);
+      expect(result).not.toContain('secret_scope_exclusions');
+      expect(result).not.toContain('lookup(');
+    });
+
+    it("should exclude the secrets of a service whose name extends another's", () => {
+      const result = generateIamTf([
+        { name: 'auth' },
+        { name: 'auth-service' },
+      ]);
+
+      expect(result).toContain('secret_scope_exclusions = tomap({');
+      expect(result).toContain('"auth" = ["auth-service"]');
+      expect(result).toContain(
+        '${join("", [for other in lookup(local.secret_scope_exclusions, each.key, []) : " && !resource.name.startsWith(\\"projects/${data.google_project.current.number}/secrets/${var.project_name}-${other}-\\")"])}"',
+      );
+    });
+
+    it('should keep the shared scope outside the exclusions', () => {
+      const result = generateIamTf([
+        { name: 'auth' },
+        { name: 'auth-service' },
+      ]);
+      const expression = result
+        .split('\n')
+        .find(
+          (line) => line.includes('expression') && line.includes('each.key'),
+        );
+
+      // CEL: && binds tighter than ||, so the exclusions only narrow the
+      // service's own scope
+      expect(expression).toMatch(
+        /-shared-\\"\) \|\| resource\.name\.startsWith\(.*-\$\{each\.key\}-\\"\)\$\{join/,
+      );
     });
   });
 

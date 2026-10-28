@@ -9,6 +9,8 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  keyVaultName: 'myproject-dev-kv',
+  serviceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -88,5 +90,30 @@ describe('generateTfvars', () => {
     expect(result).not.toContain('db_admin_password');
     expect(result).not.toContain('db_auth_service_password');
     expect(result).not.toContain('PLACEHOLDER');
+  });
+  describe('Key Vaults', () => {
+    it('should set the shared vault name', () => {
+      expect(generateTfvars(baseConfig)).toContain(
+        'key_vault_name     = "myproject-dev-kv"',
+      );
+    });
+
+    it('should map each service to its own vault', () => {
+      const result = generateTfvars({
+        ...baseConfig,
+        serviceKeyVaults: {
+          'auth-service': 'myproject-dev-auth-1a2b3c4d',
+          'bff-service': 'myproject-dev-bff-service',
+        },
+      });
+
+      expect(result).toContain(
+        'service_key_vaults = {\n  "auth-service" = "myproject-dev-auth-1a2b3c4d"\n  "bff-service" = "myproject-dev-bff-service"\n}',
+      );
+    });
+
+    it('should write an empty map without services', () => {
+      expect(generateTfvars(baseConfig)).toContain('service_key_vaults = {}');
+    });
   });
 });

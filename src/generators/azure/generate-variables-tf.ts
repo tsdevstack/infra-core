@@ -54,6 +54,17 @@ variable "subscription_id" {
   type        = string
 }
 
+variable "key_vault_name" {
+  description = "Shared Key Vault (created by cloud:init)"
+  type        = string
+}
+
+variable "service_key_vaults" {
+  description = "Each backend service's own Key Vault, by service name (created by the CLI)"
+  type        = map(string)
+  default     = {}
+}
+
 # =============================================================================
 # Domain
 # =============================================================================

@@ -5,3 +5,4 @@
 export { toTerraformId } from './to-terraform-id.ts';
 export { toTfVarSuffix } from './to-tf-var-suffix.ts';
 export { escapeHcl } from './escape-hcl.ts';
+export { toHclStringMap } from './to-hcl-string-map.ts';

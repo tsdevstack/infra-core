@@ -9,6 +9,8 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  keyVaultName: 'myproject-dev-kv',
+  serviceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -130,6 +132,14 @@ describe('generateVariablesTf', () => {
         result.indexOf('# ===', nextjsSkuStart + 1),
       );
       expect(nextjsSkuBlock).toContain('default     = "B1"');
+    });
+  });
+  describe('Key Vaults', () => {
+    it('should declare the shared vault name and the service vault map', () => {
+      const result = generateVariablesTf(baseConfig);
+      expect(result).toContain('variable "key_vault_name"');
+      expect(result).toContain('variable "service_key_vaults"');
+      expect(result).toContain('type        = map(string)');
     });
   });
 });

@@ -74,6 +74,11 @@ output "kong_internal_url" {
 output "kong_app_service_name" {
   description = "App Service name for Kong"
   value       = azurerm_linux_web_app.kong.name
+}
+
+output "kong_principal_id" {
+  description = "Kong's identity: reads Kong's runtime secrets from Key Vault"
+  value       = azurerm_linux_web_app.kong.identity[0].principal_id
 }${kongInternalUrlOutput}
 ${nextjsAppServiceOutputs}`;
 
@@ -163,6 +168,14 @@ output "container_apps_acr_identity_id" {
 output "container_apps_acr_identity_client_id" {
   description = "Client ID of the Container Apps managed identity (used as AZURE_CLIENT_ID)"
   value       = azurerm_user_assigned_identity.container_apps.client_id
+}
+
+output "service_secrets_identities" {
+  description = "Each backend service's Key Vault identity (resource ID, and client ID for AZURE_SECRETS_CLIENT_ID)"
+  value = {
+    for name, identity in azurerm_user_assigned_identity.service_secrets :
+    name => { id = identity.id, client_id = identity.client_id }
+  }
 }
 
 # =============================================================================

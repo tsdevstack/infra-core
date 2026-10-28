@@ -56,19 +56,6 @@ resource "google_project_iam_member" "runtime_secrets" {
     expression  = "resource.name.startsWith(\\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-shared-\\") || resource.name.startsWith(\\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-\${each.key}-\\")"
   }
 }
-
-# Kong Gateway secret access (shared secrets only: KONG_TRUST_TOKEN, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD)
-resource "google_project_iam_member" "kong_secrets" {
-  project = var.gcp_project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:\${google_service_account.kong.email}"
-
-  condition {
-    title       = "kong-shared-secrets-only"
-    description = "Allow Kong to access shared secrets only"
-    expression  = "resource.name.startsWith(\\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-shared-\\")"
-  }
-}
 "
 `;
 
@@ -126,19 +113,6 @@ resource "google_project_iam_member" "runtime_secrets" {
     title       = "\${each.key}-secrets-only"
     description = "Allow access to shared secrets and \${each.key}-specific secrets only"
     expression  = "resource.name.startsWith(\\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-shared-\\") || resource.name.startsWith(\\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-\${each.key}-\\")"
-  }
-}
-
-# Kong Gateway secret access (shared secrets only: KONG_TRUST_TOKEN, REDIS_HOST, REDIS_PORT, REDIS_PASSWORD)
-resource "google_project_iam_member" "kong_secrets" {
-  project = var.gcp_project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:\${google_service_account.kong.email}"
-
-  condition {
-    title       = "kong-shared-secrets-only"
-    description = "Allow Kong to access shared secrets only"
-    expression  = "resource.name.startsWith(\\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-shared-\\")"
   }
 }
 "

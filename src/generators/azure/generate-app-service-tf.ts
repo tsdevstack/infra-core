@@ -318,20 +318,15 @@ resource "azurerm_private_endpoint" "kong" {
 }
 
 /**
- * Generate ACR pull + Key Vault role assignments for a web app
+ * Generate the ACR pull role assignment for a web app. Kong and the Next.js
+ * servers read nothing from Key Vault (Kong's config is baked into its
+ * image, Next.js settings are set at deploy), so they get no vault access.
  */
 function generateRoleAssignments(prefix: string, resourceRef: string): string {
   return `
 resource "azurerm_role_assignment" "${prefix}_acr_pull" {
   scope                            = azurerm_container_registry.main.id
   role_definition_name             = "AcrPull"
-  principal_id                     = ${resourceRef}.identity[0].principal_id
-  skip_service_principal_aad_check = true
-}
-
-resource "azurerm_role_assignment" "${prefix}_keyvault" {
-  scope                            = data.azurerm_key_vault.main.id
-  role_definition_name             = "Key Vault Secrets User"
   principal_id                     = ${resourceRef}.identity[0].principal_id
   skip_service_principal_aad_check = true
 }`;

@@ -342,6 +342,10 @@ export interface AzureInfraConfig extends BaseInfraConfig {
   nextjsScaling: AppServicePlanScaling;
   /** Skip custom domain associations in routes and security policy (for two-phase deploy recovery) */
   skipCustomDomainAssociations?: boolean;
+  /** The shared Key Vault (created by cloud:init) */
+  keyVaultName: string;
+  /** Each backend service's own Key Vault, by service name (created by the CLI) */
+  serviceKeyVaults: Record<string, string>;
 }
 
 export interface AWSInfraConfig extends BaseInfraConfig {

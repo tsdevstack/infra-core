@@ -29,6 +29,9 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Only what the deploys inject into containers: shared secrets (Kong, Next.js)
+# and each service's DATABASE_URL (services, migrations). Never the other
+# per-service secrets or the database master password.
 resource "aws_iam_role_policy" "ecs_execution_secrets" {
   name = "secrets-access"
   role = aws_iam_role.ecs_execution.id
@@ -36,9 +39,51 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
+      Effect = "Allow"
+      Action = ["secretsmanager:GetSecretValue"]
+      Resource = concat(
+        ["arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-shared-*"],
+        [for name in keys(var.services) : "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${name}-DATABASE_URL-??????" if name != "kong"]
+      )
+    }]
+  })
+}
+
+# =============================================================================
+# ECS Task Execution Role (Database Tasks)
+# db-init and db-delete get the master password injected; no other task may
+# =============================================================================
+
+resource "aws_iam_role" "db_tasks_execution" {
+  name = "\${var.project_name}-db-tasks-execution"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+
+  tags = { Name = "\${var.project_name}-db-tasks-execution" }
+}
+
+resource "aws_iam_role_policy_attachment" "db_tasks_execution" {
+  role       = aws_iam_role.db_tasks_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "db_tasks_execution_secrets" {
+  name = "secrets-access"
+  role = aws_iam_role.db_tasks_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
       Effect   = "Allow"
       Action   = ["secretsmanager:GetSecretValue"]
-      Resource = "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-*"
+      Resource = [aws_secretsmanager_secret.db_master_password.arn]
     }]
   })
 }
@@ -65,8 +110,9 @@ resource "aws_iam_role" "task" {
   tags = { Name = "\${var.project_name}-\${each.key}-task" }
 }
 
+# Kong reads no secrets at runtime: the execution role injects its three at start
 resource "aws_iam_role_policy" "task_secrets" {
-  for_each = var.services
+  for_each = { for name, service in var.services : name => service if name != "kong" }
 
   name = "secrets-access"
   role = aws_iam_role.task[each.key].id

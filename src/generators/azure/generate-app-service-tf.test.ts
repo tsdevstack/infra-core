@@ -12,6 +12,8 @@ function makeConfig(
     subscriptionId: 'sub-123',
     location: 'eastus2',
     storageAccountName: 'testprojectdevtfstate',
+    keyVaultName: 'myproject-dev-kv',
+    serviceKeyVaults: {},
     database: {
       tier: 'B_Standard_B1ms',
       storageSizeGb: 32,
@@ -131,14 +133,10 @@ describe('generateAppServiceTf', () => {
       expect(result).toContain('role_definition_name             = "AcrPull"');
     });
 
-    it('should generate Kong Key Vault role assignment', () => {
+    it('should not give Kong Key Vault access (it reads no secrets)', () => {
       const result = generateAppServiceTf(makeConfig());
-      expect(result).toContain(
-        'resource "azurerm_role_assignment" "kong_keyvault"',
-      );
-      expect(result).toContain(
-        'role_definition_name             = "Key Vault Secrets User"',
-      );
+      expect(result).not.toContain('kong_keyvault');
+      expect(result).not.toContain('Key Vault Secrets User');
     });
 
     it('should set skip_service_principal_aad_check on role assignments', () => {
@@ -210,9 +208,7 @@ describe('generateAppServiceTf', () => {
       expect(result).toContain(
         'resource "azurerm_role_assignment" "nextjs_frontend_acr_pull"',
       );
-      expect(result).toContain(
-        'resource "azurerm_role_assignment" "nextjs_frontend_keyvault"',
-      );
+      expect(result).not.toContain('nextjs_frontend_keyvault');
     });
 
     it('should handle multiple Next.js services', () => {

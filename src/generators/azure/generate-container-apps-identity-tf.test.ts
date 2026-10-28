@@ -99,4 +99,36 @@ describe('generateContainerAppsIdentityTf', () => {
       expect(matches).toHaveLength(2);
     });
   });
+  describe('per-service secrets identities', () => {
+    it('should create one identity per service in service_key_vaults', () => {
+      const result = generateContainerAppsIdentityTf();
+      expect(result).toContain(
+        'resource "azurerm_user_assigned_identity" "service_secrets"',
+      );
+      expect(result).toContain('for_each = var.service_key_vaults');
+    });
+
+    it('should grant each one the shared vault and its own vault only', () => {
+      const result = generateContainerAppsIdentityTf();
+      expect(result).toContain(
+        'resource "azurerm_role_assignment" "service_secrets_shared_vault"',
+      );
+      expect(result).toContain(
+        'resource "azurerm_role_assignment" "service_secrets_own_vault"',
+      );
+      expect(result).toContain(
+        'scope                            = "${data.azurerm_resource_group.main.id}/providers/Microsoft.KeyVault/vaults/${each.value}"',
+      );
+    });
+
+    it('should not give the shared identity any service vault', () => {
+      const result = generateContainerAppsIdentityTf();
+      const sharedGrants = result
+        .split('resource ')
+        .filter((block) =>
+          block.includes('azurerm_user_assigned_identity.container_apps.'),
+        );
+      expect(sharedGrants.join('')).not.toContain('Microsoft.KeyVault/vaults/');
+    });
+  });
 });

@@ -9,6 +9,8 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  keyVaultName: 'myproject-dev-kv',
+  serviceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -85,9 +87,7 @@ describe('generateMainTf', () => {
     const result = generateMainTf(baseConfig);
 
     expect(result).toContain('data "azurerm_key_vault" "main"');
-    expect(result).toContain(
-      'name                = "${var.project_name}-${var.environment}-kv"',
-    );
+    expect(result).toContain('name                = var.key_vault_name');
     expect(result).toContain(
       'resource_group_name = data.azurerm_resource_group.main.name',
     );

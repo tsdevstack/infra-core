@@ -12,6 +12,8 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  keyVaultName: 'myproject-dev-kv',
+  serviceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,

@@ -160,6 +160,54 @@ describe('createOrUpdateContainerApp', () => {
       });
     });
 
+    it("should attach the service's Key Vault identity next to the shared one", async () => {
+      mockBeginCreateOrUpdateAndWait.mockResolvedValue({ configuration: {} });
+
+      await createOrUpdateContainerApp(mockRuntime, {
+        credentials: testCredentials,
+        resourceGroupName: 'test-rg',
+        containerAppName: 'test-app',
+        containerAppsEnvId: 'env-id',
+        image: 'myregistry.azurecr.io/myapp:latest',
+        acrLoginServer: 'myregistry.azurecr.io',
+        acrManagedIdentityId: '/identities/shared',
+        secretsIdentityId: '/identities/auth-service-secrets',
+      });
+
+      const envelope = mockBeginCreateOrUpdateAndWait.mock.calls[0][2];
+      expect(envelope.identity).toEqual({
+        type: 'UserAssigned',
+        userAssignedIdentities: {
+          '/identities/shared': {},
+          '/identities/auth-service-secrets': {},
+        },
+      });
+      // Images are still pulled with the shared identity
+      expect(envelope.configuration.registries).toEqual([
+        { server: 'myregistry.azurecr.io', identity: '/identities/shared' },
+      ]);
+    });
+
+    it('should keep only the shared identity without a secrets identity', async () => {
+      mockBeginCreateOrUpdateAndWait.mockResolvedValue({ configuration: {} });
+
+      await createOrUpdateContainerApp(mockRuntime, {
+        credentials: testCredentials,
+        resourceGroupName: 'test-rg',
+        containerAppName: 'test-app',
+        containerAppsEnvId: 'env-id',
+        image: 'myregistry.azurecr.io/myapp:latest',
+        acrLoginServer: 'myregistry.azurecr.io',
+        acrManagedIdentityId: '/identities/shared',
+      });
+
+      const envelope = mockBeginCreateOrUpdateAndWait.mock.calls[0][2];
+      expect(envelope.identity).toEqual({
+        type: 'UserAssigned',
+        userAssignedIdentities: { '/identities/shared': {} },
+      });
+    });
+
     it('should pass secrets to Container App configuration', async () => {
       mockBeginCreateOrUpdateAndWait.mockResolvedValue({
         configuration: {},
