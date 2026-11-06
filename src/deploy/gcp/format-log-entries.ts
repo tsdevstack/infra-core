@@ -6,7 +6,8 @@
 
 export interface LogEntry {
   metadata?: { timestamp?: string; severity?: string };
-  data?: string | { message?: string };
+  /** Plain text, or a JSON line: pino writes msg, others message */
+  data?: string | { msg?: string; message?: string };
 }
 
 /**
@@ -23,7 +24,7 @@ export function formatLogEntries(entries: unknown[]): string {
     const message =
       typeof e.data === 'string'
         ? e.data
-        : e.data?.message || JSON.stringify(e.data);
+        : e.data?.msg || e.data?.message || JSON.stringify(e.data);
 
     logs.push(`[${timestamp}] ${severity}: ${message}`);
   }

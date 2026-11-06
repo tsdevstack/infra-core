@@ -41,9 +41,28 @@ describe('generateJobInvokerLambdaCode', () => {
   });
 
   describe('handler', () => {
-    it('should extract serviceName and path from event', () => {
+    it('should extract serviceName, path and jobName from event', () => {
       const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('const { serviceName, path } = event;');
+      expect(result).toContain('const { serviceName, path, jobName } = event;');
+    });
+
+    it('should start every line with the job name', () => {
+      const result = generateJobInvokerLambdaCode();
+      expect(result).toContain('console.log(`job=${job} ${message}`)');
+      expect(result).toContain('console.error(`job=${job} ${message}`)');
+      expect(result).toContain('log(`Run started: POST ${url}`);');
+      expect(result).toContain(
+        'log(`Run finished: ${response.status} in ${Date.now() - started}ms`);',
+      );
+    });
+
+    it('should log the response body only when the job fails', () => {
+      const result = generateJobInvokerLambdaCode();
+      expect(result).toContain(
+        '`Run finished: ${response.status} (${responseText.substring(0, 1000)})`',
+      );
+      expect(result).not.toContain('Response body:');
+      expect(result).not.toContain('Job invocation received');
     });
 
     it('should validate required parameters', () => {
@@ -80,9 +99,9 @@ describe('generateJobInvokerLambdaCode', () => {
       expect(result).toContain("'X-Job-Secret': SecretString");
     });
 
-    it('should have 5 minute timeout', () => {
+    it("should time out the call before the function's 300 s timeout", () => {
       const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('signal: AbortSignal.timeout(300000)');
+      expect(result).toContain('signal: AbortSignal.timeout(290000)');
     });
   });
 

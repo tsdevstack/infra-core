@@ -326,7 +326,7 @@ describe('generateAppServiceTf', () => {
   });
 
   describe('lifecycle ignore_changes', () => {
-    it('should ignore app_settings and docker_image_name on Kong web app', () => {
+    it('should ignore app_settings and the whole container setup on Kong (the deploy runs it with its collector sidecar)', () => {
       const result = generateAppServiceTf(makeConfig());
       const kongBlock = result.slice(
         result.indexOf('resource "azurerm_linux_web_app" "kong"'),
@@ -338,7 +338,10 @@ describe('generateAppServiceTf', () => {
       expect(kongBlock).toContain('lifecycle {');
       expect(kongBlock).toContain('ignore_changes');
       expect(kongBlock).toContain('app_settings');
-      expect(kongBlock).toContain('docker_image_name');
+      expect(kongBlock).toContain('site_config[0].application_stack,');
+      expect(kongBlock).not.toContain(
+        'site_config[0].application_stack[0].docker_image_name',
+      );
     });
 
     it('should ignore app_settings and docker_image_name on Next.js web apps', () => {
@@ -415,6 +418,9 @@ describe('generateAppServiceTf', () => {
         'virtual_network_id    = azurerm_virtual_network.main.id',
       );
       expect(link).toContain('resolution_policy     = "NxDomainRedirect"');
+      expect(link).toContain(
+        'private_dns_zone_id   = azurerm_private_dns_zone.app_service.id',
+      );
     });
 
     it('should not create the endpoint or its DNS zone without Next.js apps', () => {

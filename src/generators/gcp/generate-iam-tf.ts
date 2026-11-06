@@ -127,6 +127,22 @@ resource "google_project_iam_member" "runtime_cloudsql" {
   member  = "serviceAccount:\${google_service_account.runtime[each.key].email}"
 }
 
+# Traces to Cloud Trace (OTLP to telemetry.googleapis.com): every service,
+# worker and frontend, and Kong's collector sidecar
+resource "google_project_iam_member" "runtime_traces" {
+  for_each = toset(local.services)
+
+  project = var.gcp_project_id
+  role    = "roles/telemetry.tracesWriter"
+  member  = "serviceAccount:\${google_service_account.runtime[each.key].email}"
+}
+
+resource "google_project_iam_member" "kong_traces" {
+  project = var.gcp_project_id
+  role    = "roles/telemetry.tracesWriter"
+  member  = "serviceAccount:\${google_service_account.kong.email}"
+}
+
 # Grant Secret Manager access with scoped conditions
 # Each service can only access shared secrets and its own service-specific secrets
 # Note: resource.name in IAM uses project NUMBER (not ID), so we use data.google_project.current.number

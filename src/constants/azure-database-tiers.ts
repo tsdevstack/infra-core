@@ -13,7 +13,10 @@ export const AZURE_DATABASE_CONNECTION_LIMITS: Record<string, number> = {
   B_Standard_B2ms: 859,
   GP_Standard_D2s_v3: 859,
   GP_Standard_D4s_v3: 1718,
+  GP_Standard_D2ds_v5: 859,
+  GP_Standard_D4ds_v5: 1718,
   MO_Standard_E4s_v3: 3437,
+  MO_Standard_E4ds_v5: 3437,
 };
 
 export const DEFAULT_AZURE_DATABASE_TIER = 'B_Standard_B1ms';

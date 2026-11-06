@@ -62,18 +62,19 @@ describe('generateContainerAppsEnvTf', () => {
       expect(result).toContain('public_network_access          = "Disabled"');
     });
 
-    it('should set logs destination to log-analytics', () => {
+    it('should send logs to Azure Monitor (diagnostic settings)', () => {
       const result = generateContainerAppsEnvTf();
       expect(result).toContain(
-        'logs_destination               = "log-analytics"',
+        'logs_destination               = "azure-monitor"',
       );
     });
 
-    it('should link to Log Analytics Workspace', () => {
+    it('should not link the workspace directly (only log-analytics allows it)', () => {
       const result = generateContainerAppsEnvTf();
-      expect(result).toContain(
-        'log_analytics_workspace_id     = azurerm_log_analytics_workspace.main.id',
+      const envBlock = result.slice(
+        result.indexOf('resource "azurerm_container_app_environment"'),
       );
+      expect(envBlock).not.toContain('log_analytics_workspace_id');
     });
 
     it('should apply tags', () => {

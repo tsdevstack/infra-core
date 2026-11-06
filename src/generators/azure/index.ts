@@ -24,5 +24,7 @@ export { generateAzureUserWafRules } from './generate-azure-user-waf-rules.ts';
 export { generateAppServiceTf } from './generate-app-service-tf.ts';
 export { generateAppServiceAutoscaleTf } from './generate-app-service-autoscale-tf.ts';
 export { generateDiagnosticsTf } from './generate-diagnostics-tf.ts';
+export { generateTracingTf } from './generate-tracing-tf.ts';
+export { generateDashboardTf } from './generate-dashboard-tf.ts';
 export { generateScheduledJobsTf } from './generate-scheduled-jobs-tf.ts';
 export { generateBlobStorageTf } from './generate-blob-storage-tf.ts';

@@ -49,9 +49,9 @@ describe('generateEventbridgeTf', () => {
       expect(result).toContain('resource "aws_lambda_function" "job_invoker"');
     });
 
-    it('should use Node.js 22 runtime', () => {
+    it('should use Node.js 24 runtime', () => {
       const result = generateEventbridgeTf();
-      expect(result).toContain('runtime       = "nodejs22.x"');
+      expect(result).toContain('runtime       = "nodejs24.x"');
     });
 
     it('should have 5 minute timeout', () => {
@@ -159,6 +159,7 @@ describe('generateEventbridgeTf', () => {
       const result = generateEventbridgeTf();
       expect(result).toContain('serviceName = each.value.serviceName');
       expect(result).toContain('path        = each.value.path');
+      expect(result).toContain('jobName     = each.key');
     });
 
     it('should configure retry policy', () => {

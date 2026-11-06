@@ -11,6 +11,7 @@ import type { Container } from '@azure/arm-appcontainers';
 import type { InfraCoreRuntime } from '../../../types/runtime.ts';
 import type { AzureCredentials } from '../../../types/credentials.ts';
 import { InfraCoreError } from '../../../runtime/infra-core-error.ts';
+import { AZURE_WORKER_CPU_SCALE_RULE } from '../../../constants/azure-container-apps.ts';
 
 export interface CreateOrUpdateContainerAppOptions {
   credentials: AzureCredentials;
@@ -153,6 +154,7 @@ export async function createOrUpdateContainerApp(
             minReplicas,
             maxReplicas,
             cooldownPeriod: 900,
+            // Services scale on HTTP requests; workers (no ingress) on CPU
             rules: ingressPort
               ? [
                   {
@@ -162,7 +164,7 @@ export async function createOrUpdateContainerApp(
                     },
                   },
                 ]
-              : undefined,
+              : [AZURE_WORKER_CPU_SCALE_RULE],
           },
         },
       },

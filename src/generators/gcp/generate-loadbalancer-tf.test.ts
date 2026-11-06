@@ -486,4 +486,21 @@ describe('generateLoadBalancerTf', () => {
       expect(matches?.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  describe('load balancer type', () => {
+    it('should pin the Classic load balancer on every backend service and forwarding rule', () => {
+      const result = generateLoadBalancerTf({
+        apiDomain: 'api.example.com',
+        frontendServices: [],
+      });
+      const backendServices =
+        result.match(/resource "google_compute_backend_service"/g) ?? [];
+      const forwardingRules =
+        result.match(/resource "google_compute_global_forwarding_rule"/g) ?? [];
+      expect(backendServices.length + forwardingRules.length).toBe(5);
+      expect(result.match(/load_balancing_scheme = "EXTERNAL"/g)).toHaveLength(
+        5,
+      );
+    });
+  });
 });

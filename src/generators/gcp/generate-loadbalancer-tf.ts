@@ -27,6 +27,7 @@ import { toDnsAuthName } from '../../utils/gcp/to-dns-auth-name.ts';
 import { generateCustomWafRules } from './generate-custom-waf-rules.ts';
 import { generateSpaEdgeSecurityPolicy } from './generate-spa-edge-security-policy.ts';
 import { GCP_EDGE_CLIENT_IP_HEADER } from '../../constants/gcp-client-ip.ts';
+import { GCP_LOAD_BALANCING_SCHEME } from '../../constants/gcp-load-balancer.ts';
 
 /**
  * Frontend service with its domain and hosting type
@@ -116,6 +117,7 @@ resource "google_compute_region_network_endpoint_group" "${toTerraformId(service
 resource "google_compute_backend_service" "${toTerraformId(service.name)}" {
   name            = "\${var.project_name}-${service.name}-backend"
   protocol        = "HTTPS"
+  load_balancing_scheme = "${GCP_LOAD_BALANCING_SCHEME}"
   security_policy = google_compute_security_policy.default.id
   enable_cdn      = true
 
@@ -563,6 +565,7 @@ resource "google_compute_region_network_endpoint_group" "kong_neg" {
 resource "google_compute_backend_service" "kong" {
   name            = "\${var.project_name}-kong-backend"
   protocol        = "HTTPS"
+  load_balancing_scheme = "${GCP_LOAD_BALANCING_SCHEME}"
   security_policy = google_compute_security_policy.default.id
 
   # The client's address, read by Kong (GCP_KONG_CLIENT_IP_SETTINGS)
@@ -737,6 +740,7 @@ resource "google_compute_global_forwarding_rule" "https" {
   ip_address = google_compute_global_address.lb.address
   port_range = "443"
   target     = google_compute_target_https_proxy.main.id
+  load_balancing_scheme = "${GCP_LOAD_BALANCING_SCHEME}"
 
   depends_on = [google_compute_target_https_proxy.main]
 }
@@ -747,6 +751,7 @@ resource "google_compute_global_forwarding_rule" "https_ipv6" {
   ip_address = google_compute_global_address.lb_ipv6.address
   port_range = "443"
   target     = google_compute_target_https_proxy.main.id
+  load_balancing_scheme = "${GCP_LOAD_BALANCING_SCHEME}"
 
   depends_on = [google_compute_target_https_proxy.main]
 }
@@ -775,6 +780,7 @@ resource "google_compute_global_forwarding_rule" "http_redirect" {
   ip_address = google_compute_global_address.lb.address
   port_range = "80"
   target     = google_compute_target_http_proxy.redirect.id
+  load_balancing_scheme = "${GCP_LOAD_BALANCING_SCHEME}"
 }
 
 resource "google_compute_global_forwarding_rule" "http_redirect_ipv6" {
@@ -782,6 +788,7 @@ resource "google_compute_global_forwarding_rule" "http_redirect_ipv6" {
   ip_address = google_compute_global_address.lb_ipv6.address
   port_range = "80"
   target     = google_compute_target_http_proxy.redirect.id
+  load_balancing_scheme = "${GCP_LOAD_BALANCING_SCHEME}"
 }
 
 # =============================================================================

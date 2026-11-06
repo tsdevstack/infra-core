@@ -46,6 +46,7 @@ variable "services" {
     minInstances = number  # 1+ (AWS has no scale-to-zero)
     maxInstances = number
     dbPoolMax    = number  # Database connection pool size per instance
+    logLevel     = string  # LOG_LEVEL (not set on Kong)
   }))
 }
 
@@ -58,6 +59,7 @@ variable "workers" {
     maxInstances = number
     service      = string  # The base service this worker belongs to
     dbPoolMax    = number  # Database connection pool size per instance
+    logLevel     = string  # LOG_LEVEL
   }))
   default = {}
 }
@@ -151,6 +153,16 @@ variable "redis_node_type" {
   description = "ElastiCache node type (e.g., cache.t3.micro, cache.t3.small)"
   type        = string
   default     = "cache.t3.micro"
+}
+
+# ─────────────────────────────────────────
+# Tracing
+# ─────────────────────────────────────────
+
+variable "trace_sample_rate" {
+  description = "Share of new traces kept, 0 to 1 (tracing.sampleRate)"
+  type        = number
+  default     = 1
 }
 
 # ─────────────────────────────────────────
@@ -211,6 +223,7 @@ variable "services" {
     minInstances = number  # 1+ (AWS has no scale-to-zero)
     maxInstances = number
     dbPoolMax    = number  # Database connection pool size per instance
+    logLevel     = string  # LOG_LEVEL (not set on Kong)
   }))
 }
 
@@ -223,6 +236,7 @@ variable "workers" {
     maxInstances = number
     service      = string  # The base service this worker belongs to
     dbPoolMax    = number  # Database connection pool size per instance
+    logLevel     = string  # LOG_LEVEL
   }))
   default = {}
 }
@@ -316,6 +330,16 @@ variable "redis_node_type" {
   description = "ElastiCache node type (e.g., cache.t3.micro, cache.t3.small)"
   type        = string
   default     = "cache.t3.micro"
+}
+
+# ─────────────────────────────────────────
+# Tracing
+# ─────────────────────────────────────────
+
+variable "trace_sample_rate" {
+  description = "Share of new traces kept, 0 to 1 (tracing.sampleRate)"
+  type        = number
+  default     = 1
 }
 
 # ─────────────────────────────────────────

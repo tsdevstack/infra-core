@@ -3,6 +3,7 @@
  */
 
 import type { AWSInfraConfig } from '../../types/config.ts';
+import { TERRAFORM_PROVIDER_VERSIONS } from '../../constants/index.ts';
 
 export function generateMainTf(config: AWSInfraConfig): string {
   const { stateBucket, lockTable, environment, region } = config;
@@ -16,11 +17,11 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.aws}"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.0"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.random}"
     }
   }
 

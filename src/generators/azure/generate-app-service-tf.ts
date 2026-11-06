@@ -151,10 +151,13 @@ ${kongClientIpSettings}
     type = "SystemAssigned"
   }
 
+  # The deploy runs Kong with its collector sidecar (App Service site
+  # containers, which azurerm can't manage): it owns the containers and the
+  # app settings after creation
   lifecycle {
     ignore_changes = [
       app_settings,
-      site_config[0].application_stack[0].docker_image_name,
+      site_config[0].application_stack,
     ]
   }
 }
@@ -285,8 +288,7 @@ resource "azurerm_private_dns_zone" "app_service" {
 
 resource "azurerm_private_dns_zone_virtual_network_link" "app_service" {
   name                  = "app-service-vnet-link"
-  resource_group_name   = data.azurerm_resource_group.main.name
-  private_dns_zone_name = azurerm_private_dns_zone.app_service.name
+  private_dns_zone_id   = azurerm_private_dns_zone.app_service.id
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
   # Names this zone has no record for (other azurewebsites.net apps with

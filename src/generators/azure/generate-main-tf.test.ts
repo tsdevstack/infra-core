@@ -42,7 +42,7 @@ describe('generateMainTf', () => {
     expect(result).toContain('terraform {');
     expect(result).toContain('required_version = ">= 1.5"');
     expect(result).toContain('hashicorp/azurerm');
-    expect(result).toContain('~> 4.50');
+    expect(result).toContain('~> 5.12');
   });
 
   it('should include azurerm backend configuration', () => {
@@ -68,6 +68,16 @@ describe('generateMainTf', () => {
     expect(result).toContain('subscription_id');
     expect(result).toContain('var.subscription_id');
     expect(result).toContain('resource_provider_registrations = "none"');
+  });
+
+  it('should configure azapi (the traces rule) on the same subscription', () => {
+    const result = generateMainTf(baseConfig);
+
+    expect(result).toContain('source  = "Azure/azapi"');
+    expect(result).toContain('version = "~> 2.13"');
+    expect(result).toContain(
+      'provider "azapi" {\n  subscription_id = var.subscription_id\n}',
+    );
   });
 
   it('should include data source for current client config', () => {

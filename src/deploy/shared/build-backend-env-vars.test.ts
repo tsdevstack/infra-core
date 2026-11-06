@@ -63,4 +63,50 @@ describe('buildBackendEnvVars', () => {
       expect(result.AWS_REGION).toBe('us-east-1');
     });
   });
+  describe('Log level and worker name', () => {
+    it('should set LOG_LEVEL and WORKER_NAME when given', () => {
+      const result = buildBackendEnvVars({
+        provider: 'gcp',
+        projectName: 'my-project',
+        projectId: 'my-project-dev',
+        poolMax: 5,
+        logLevel: 'debug',
+        workerName: 'auth-worker',
+      });
+
+      expect(result.LOG_LEVEL).toBe('debug');
+      expect(result.WORKER_NAME).toBe('auth-worker');
+    });
+
+    it('should leave both out when not given', () => {
+      const result = buildBackendEnvVars({
+        provider: 'azure',
+        projectName: 'my-project',
+        projectId: 'sub-id',
+        poolMax: 5,
+      });
+
+      expect(result.LOG_LEVEL).toBeUndefined();
+      expect(result.WORKER_NAME).toBeUndefined();
+    });
+  });
+  describe('Trace sample rate', () => {
+    it('should set TRACE_SAMPLE_RATE when given, 0 included', () => {
+      const base = {
+        provider: 'gcp' as const,
+        projectName: 'my-project',
+        projectId: 'my-project-dev',
+        poolMax: 5,
+      };
+
+      expect(
+        buildBackendEnvVars({ ...base, traceSampleRate: 0.25 })
+          .TRACE_SAMPLE_RATE,
+      ).toBe('0.25');
+      expect(
+        buildBackendEnvVars({ ...base, traceSampleRate: 0 }).TRACE_SAMPLE_RATE,
+      ).toBe('0');
+      expect(buildBackendEnvVars(base).TRACE_SAMPLE_RATE).toBeUndefined();
+    });
+  });
 });

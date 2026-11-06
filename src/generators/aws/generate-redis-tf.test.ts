@@ -139,4 +139,11 @@ describe('generateRedisTf', () => {
       expect(result).toMatchSnapshot();
     });
   });
+
+  describe('auth token updates', () => {
+    it('should set the update strategy, which provider 6 requires with auth_token', () => {
+      const result = generateRedisTf();
+      expect(result).toContain('auth_token_update_strategy = "ROTATE"');
+    });
+  });
 });

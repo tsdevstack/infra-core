@@ -314,6 +314,44 @@ describe('executeTerraform', () => {
     });
   });
 
+  describe('upgrade flag', () => {
+    it('should add -upgrade to init when asked', async () => {
+      const promise = executeTerraform('init', {
+        workDir: '/test',
+        upgrade: true,
+      });
+      mockChild.emit('close', 0);
+      await promise;
+
+      expect(mockSpawn).toHaveBeenCalledWith(
+        'terraform',
+        expect.arrayContaining(['init', '-upgrade']),
+        expect.any(Object),
+      );
+    });
+
+    it('should not upgrade by default', async () => {
+      const promise = executeTerraform('init', { workDir: '/test' });
+      mockChild.emit('close', 0);
+      await promise;
+
+      const args = mockSpawn.mock.calls[0][1] as string[];
+      expect(args).not.toContain('-upgrade');
+    });
+
+    it('should ignore upgrade for other commands', async () => {
+      const promise = executeTerraform('plan', {
+        workDir: '/test',
+        upgrade: true,
+      });
+      mockChild.emit('close', 0);
+      await promise;
+
+      const args = mockSpawn.mock.calls[0][1] as string[];
+      expect(args).not.toContain('-upgrade');
+    });
+  });
+
   describe('result handling', () => {
     it('should return success when exit code is 0', async () => {
       const promise = executeTerraform('init', { workDir: '/test' });
@@ -338,6 +376,35 @@ describe('executeTerraform', () => {
       const result = await promise;
 
       expect(result.output).toContain('Plan output');
+    });
+
+    it('should explain a provider version held back by the lock file', async () => {
+      const promise = executeTerraform('init', { workDir: '/test' });
+      mockChild.stderr.emit(
+        'data',
+        Buffer.from(
+          '│ hashicorp/aws: locked provider registry.terraform.io/hashicorp/aws 5.100.0\n│ does not match configured version constraint ~> 6.71; must use terraform\n',
+        ),
+      );
+      mockChild.emit('close', 1);
+      const result = await promise;
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain(
+        'infra:plan --env <environment> --upgrade',
+      );
+    });
+
+    it('should leave other init failures without an error text', async () => {
+      const promise = executeTerraform('init', { workDir: '/test' });
+      mockChild.stderr.emit(
+        'data',
+        Buffer.from('Error: bucket does not exist'),
+      );
+      mockChild.emit('close', 1);
+      const result = await promise;
+
+      expect(result.error).toBeUndefined();
     });
 
     it('should return error on spawn error', async () => {

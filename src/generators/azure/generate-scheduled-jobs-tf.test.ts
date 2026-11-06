@@ -166,6 +166,26 @@ describe('generateScheduledJobsTf', () => {
     expect(result).toContain('cron_expression');
   });
 
+  it("should print the response and its status in the run's log", () => {
+    const config: AzureInfraConfig = {
+      ...baseConfig,
+      scheduledJobs: {
+        'daily-cleanup': {
+          name: 'daily-cleanup',
+          schedule: '0 2 * * *',
+          targetService: 'auth-service',
+          endpoint: '/jobs/cleanup',
+        },
+      },
+    };
+
+    const result = generateScheduledJobsTf(config);
+
+    expect(result).toContain('curl -sSL --fail-with-body');
+    expect(result).toContain("-w ' HTTP %%{http_code} in %%{time_total}s'");
+    expect(result).not.toContain('-sfL');
+  });
+
   it('should include curl retry flags for cold start resilience', () => {
     const config: AzureInfraConfig = {
       ...baseConfig,

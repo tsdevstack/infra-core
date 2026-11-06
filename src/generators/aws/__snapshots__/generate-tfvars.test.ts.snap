@@ -21,6 +21,7 @@ services = {
     minInstances = 1
     maxInstances = 4
     dbPoolMax    = 18
+    logLevel     = "info"
   }
   "bff-service" = {
     cpu          = 512
@@ -28,6 +29,7 @@ services = {
     minInstances = 0
     maxInstances = 2
     dbPoolMax    = 37
+    logLevel     = "info"
   }
   "kong" = {
     cpu          = 256
@@ -35,6 +37,7 @@ services = {
     minInstances = 1
     maxInstances = 4
     dbPoolMax    = 0
+    logLevel     = "info"
   }
 }
 
@@ -46,6 +49,7 @@ workers = {
     maxInstances = 3
     service      = "auth-service"
     dbPoolMax    = 8
+    logLevel     = "info"
   }
 }
 
@@ -92,6 +96,9 @@ database_ha                  = false
 
 # Redis (ElastiCache)
 redis_node_type = "cache.t3.micro"
+
+# Tracing: share of new traces kept (tracing.sampleRate)
+trace_sample_rate = 1
 "
 `;
 
@@ -133,5 +140,8 @@ database_ha                  = false
 
 # Redis (ElastiCache)
 redis_node_type = "cache.t3.micro"
+
+# Tracing: share of new traces kept (tracing.sampleRate)
+trace_sample_rate = 1
 "
 `;

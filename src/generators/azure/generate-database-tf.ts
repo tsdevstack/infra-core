@@ -22,6 +22,29 @@ export function generateDatabaseTf(config: AzureInfraConfig): string {
 `
     : '';
 
+  // Per-query statistics (Query Store) are free, but Microsoft says not to
+  // turn them on on Burstable tiers (B_*), where they cause performance
+  // problems
+  const queryStoreBlock = config.database.tier.startsWith('B_')
+    ? ''
+    : `
+# Per-query statistics (Query Store): free; on General Purpose and Memory
+# Optimized tiers only (Microsoft: not on Burstable)
+resource "azurerm_postgresql_flexible_server_configuration" "query_store" {
+  name       = "pg_qs.query_capture_mode"
+  server_id  = azurerm_postgresql_flexible_server.main.id
+  value      = "top"
+  depends_on = [azurerm_postgresql_flexible_server_configuration.enhanced_metrics]
+}
+
+resource "azurerm_postgresql_flexible_server_configuration" "query_store_waits" {
+  name       = "pgms_wait_sampling.query_capture_mode"
+  server_id  = azurerm_postgresql_flexible_server.main.id
+  value      = "all"
+  depends_on = [azurerm_postgresql_flexible_server_configuration.query_store]
+}
+`;
+
   // Default name stays a Terraform expression so existing projects generate unchanged
   const serverName =
     config.database.serverName !== undefined
@@ -88,5 +111,17 @@ resource "azurerm_postgresql_flexible_server_configuration" "require_ssl" {
   server_id = azurerm_postgresql_flexible_server.main.id
   value     = "on"
 }
-`;
+
+# =============================================================================
+# Monitoring (one parameter change at a time: Azure rejects concurrent ones)
+# =============================================================================
+
+# Enhanced metrics (transactions, deadlocks, sessions by state): free, no restart
+resource "azurerm_postgresql_flexible_server_configuration" "enhanced_metrics" {
+  name       = "metrics.collector_database_activity"
+  server_id  = azurerm_postgresql_flexible_server.main.id
+  value      = "on"
+  depends_on = [azurerm_postgresql_flexible_server_configuration.require_ssl]
+}
+${queryStoreBlock}`;
 }

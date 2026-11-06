@@ -3,6 +3,7 @@
  */
 
 import type { GCPInfraConfig } from '../../types/index.ts';
+import { TERRAFORM_PROVIDER_VERSIONS } from '../../constants/index.ts';
 
 export function generateMainTf(config: GCPInfraConfig): string {
   const { stateBucket, environment } = config;
@@ -16,7 +17,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.google}"
     }
   }
 
@@ -29,6 +30,10 @@ terraform {
 provider "google" {
   project = var.gcp_project_id
   region  = var.gcp_region
+
+  # Keep labels as they are: from provider 6, new resources would get
+  # goog-terraform-provisioned = true, unlike existing ones
+  add_terraform_attribution_label = false
 }
 `;
 }

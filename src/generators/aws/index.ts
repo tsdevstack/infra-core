@@ -39,3 +39,5 @@ export { generateDbDeleteTf } from './generate-db-delete-tf.ts';
 export { generateDbDelete, type DbDeleteFiles } from './generate-db-delete.ts';
 export { generateS3StorageTf } from './generate-s3-storage-tf.ts';
 export { generateLoggingTf } from './generate-logging-tf.ts';
+export { generateXrayTf } from './generate-xray-tf.ts';
+export { generateDashboardTf } from './generate-dashboard-tf.ts';

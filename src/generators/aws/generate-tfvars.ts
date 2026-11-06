@@ -3,6 +3,10 @@
  */
 
 import type { AWSInfraConfig } from '../../types/config.ts';
+import {
+  DEFAULT_SERVICE_LOG_LEVEL,
+  DEFAULT_TRACE_SAMPLE_RATE,
+} from '../../constants/index.ts';
 
 export function generateTfvars(config: AWSInfraConfig): string {
   const {
@@ -19,6 +23,7 @@ export function generateTfvars(config: AWSInfraConfig): string {
     spas,
     frontends,
     scheduledJobs,
+    traceSampleRate,
   } = config;
 
   // Format services map
@@ -76,6 +81,9 @@ database_ha                  = ${database.ha ?? false}
 
 # Redis (ElastiCache)
 redis_node_type = "${redis.tier}"
+
+# Tracing: share of new traces kept (tracing.sampleRate)
+trace_sample_rate = ${traceSampleRate ?? DEFAULT_TRACE_SAMPLE_RATE}
 `;
 }
 
@@ -91,6 +99,7 @@ function formatServicesMap(services: AWSInfraConfig['services']): string {
     minInstances = ${cfg.minInstances}
     maxInstances = ${cfg.maxInstances}
     dbPoolMax    = ${cfg.dbPoolMax ?? 5}
+    logLevel     = "${cfg.logLevel ?? DEFAULT_SERVICE_LOG_LEVEL}"
   }`,
   );
 
@@ -112,6 +121,7 @@ function formatWorkersMap(workers: AWSInfraConfig['workers']): string {
     maxInstances = ${cfg.maxInstances}
     service      = "${cfg.service}"
     dbPoolMax    = ${cfg.dbPoolMax ?? 5}
+    logLevel     = "${cfg.logLevel ?? DEFAULT_SERVICE_LOG_LEVEL}"
   }`,
   );
 

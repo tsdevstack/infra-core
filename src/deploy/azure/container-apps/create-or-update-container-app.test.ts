@@ -266,7 +266,7 @@ describe('createOrUpdateContainerApp', () => {
       expect(container.env).toContainEqual({ name: 'PORT', value: '3000' });
     });
 
-    it('should apply custom scaling configuration without rules when no ingress', async () => {
+    it('should scale an app without ingress (a worker) on CPU', async () => {
       mockBeginCreateOrUpdateAndWait.mockResolvedValue({
         configuration: {},
       });
@@ -290,7 +290,15 @@ describe('createOrUpdateContainerApp', () => {
         minReplicas: 1,
         maxReplicas: 5,
         cooldownPeriod: 900,
-        rules: undefined,
+        rules: [
+          {
+            name: 'cpu-scaling',
+            custom: {
+              type: 'cpu',
+              metadata: { type: 'Utilization', value: '70' },
+            },
+          },
+        ],
       });
       const container = containerAppEnvelope.template.containers[0];
       expect(container.resources).toEqual({ cpu: 0.5, memory: '1Gi' });

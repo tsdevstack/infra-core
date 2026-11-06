@@ -46,6 +46,13 @@ describe('generateOutputsTf', () => {
     expect(result).toContain('output "resource_group_name"');
   });
 
+  it("should output the apps' OTLP traces URL", () => {
+    const result = generateOutputsTf(baseConfig);
+
+    expect(result).toContain('output "otlp_traces_url"');
+    expect(result).toContain('value       = local.otlp_traces_url');
+  });
+
   it('should reference resource group data source', () => {
     const result = generateOutputsTf(baseConfig);
 

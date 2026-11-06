@@ -8,10 +8,11 @@ describe('generateEcsTf', () => {
       expect(result).toContain('resource "aws_ecs_cluster" "main"');
     });
 
-    it('should enable container insights', () => {
+    it('should keep Container Insights off (billed per metric; the dashboard uses the free metrics)', () => {
       const result = generateEcsTf();
-      expect(result).toContain('name  = "containerInsights"');
-      expect(result).toContain('value = "enabled"');
+      expect(result).toContain(
+        'name  = "containerInsights"\n    value = "disabled"',
+      );
     });
 
     it('should use project name in cluster name', () => {

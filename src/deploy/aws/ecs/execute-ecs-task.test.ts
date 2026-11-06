@@ -29,6 +29,7 @@ rs.mock('@aws-sdk/client-cloudwatch-logs', () => {
       return { send: mockLogsSend };
     }),
     CreateLogGroupCommand: command('create-log-group'),
+    PutRetentionPolicyCommand: command('put-retention'),
     GetLogEventsCommand: command('get-log-events'),
   };
 });
@@ -139,6 +140,25 @@ describe('executeEcsTask', () => {
       );
     });
 
+    it("should keep the migration's log lines for 30 days", async () => {
+      mockEcs([
+        {
+          lastStatus: 'STOPPED',
+          containers: [{ name: 'migration', exitCode: 0 }],
+        },
+      ]);
+
+      await executeEcsTask(mockRuntime, options);
+
+      const retention = mockLogsSend.mock.calls
+        .map(([cmd]) => cmd as { _type: string; _params: unknown })
+        .find((cmd) => cmd._type === 'put-retention');
+      expect(retention?._params).toEqual({
+        logGroupName: '/ecs/migrate-offers-service-migration',
+        retentionInDays: 30,
+      });
+    });
+
     it('should fail with the exit code and stop reason when the container exits non-zero', async () => {
       mockEcs([
         {
@@ -216,6 +236,30 @@ describe('executeEcsTask', () => {
           ([cmd]) => (cmd as { _type: string })._type === 'deregister',
         ),
       ).toBe(true);
+    });
+
+    it('should run the migration when the retention cannot be set', async () => {
+      mockEcs([
+        {
+          lastStatus: 'STOPPED',
+          containers: [{ name: 'migration', exitCode: 0 }],
+        },
+      ]);
+      mockLogsSend.mockImplementation(async (cmd: { _type: string }) => {
+        if (cmd._type === 'put-retention') {
+          throw new Error('AccessDeniedException');
+        }
+        return cmd._type === 'get-log-events'
+          ? { events: [{ message: 'No pending migrations to apply.' }] }
+          : {};
+      });
+
+      const result = await executeEcsTask(mockRuntime, options);
+
+      expect(result.success).toBe(true);
+      expect(mockRuntime.logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not set the retention'),
+      );
     });
   });
 });

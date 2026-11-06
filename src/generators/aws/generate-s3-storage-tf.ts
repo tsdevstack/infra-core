@@ -163,7 +163,7 @@ output "storage_buckets" {
     key => {
       name   = bucket.id
       arn    = bucket.arn
-      region = bucket.region
+      region = bucket.bucket_region
     }
   }
 }

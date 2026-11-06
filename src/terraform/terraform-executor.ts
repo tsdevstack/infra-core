@@ -3,6 +3,8 @@
  */
 
 import { spawn } from 'child_process';
+import { PROVIDER_LOCK_MISMATCH_HINT } from '../constants/terraform-providers.ts';
+import { isProviderLockMismatch } from './is-provider-lock-mismatch.ts';
 import type {
   TerraformCommand,
   TerraformExecuteOptions,
@@ -23,6 +25,7 @@ export async function executeTerraform(
     target,
     varFile,
     reconfigure,
+    upgrade,
     lockId,
     importAddress,
     importId,
@@ -65,6 +68,11 @@ export async function executeTerraform(
   // Add -reconfigure flag for init (handles backend changes)
   if (reconfigure && command === 'init') {
     args.push('-reconfigure');
+  }
+
+  // Move providers past the lock file (infra:plan --upgrade)
+  if (upgrade && command === 'init') {
+    args.push('-upgrade');
   }
 
   // Add -input=false for non-interactive mode
@@ -149,7 +157,10 @@ export async function executeTerraform(
         resolve({
           success: false,
           output: combinedOutput,
-          error: undefined,
+          error:
+            command === 'init' && isProviderLockMismatch(combinedOutput)
+              ? PROVIDER_LOCK_MISMATCH_HINT
+              : undefined,
         });
       }
     });

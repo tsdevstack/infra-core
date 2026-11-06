@@ -40,6 +40,42 @@ const baseConfig: AzureInfraConfig = {
 };
 
 describe('generateDatabaseTf', () => {
+  describe('Monitoring', () => {
+    it('should turn on enhanced metrics, after the SSL setting', () => {
+      const result = generateDatabaseTf(baseConfig);
+
+      expect(result).toContain(
+        'name       = "metrics.collector_database_activity"',
+      );
+      expect(result).toContain(
+        'depends_on = [azurerm_postgresql_flexible_server_configuration.require_ssl]',
+      );
+    });
+
+    it('should leave Query Store off on Burstable tiers', () => {
+      const result = generateDatabaseTf(baseConfig);
+
+      expect(result).not.toContain('pg_qs.query_capture_mode');
+      expect(result).not.toContain('pgms_wait_sampling.query_capture_mode');
+    });
+
+    it('should turn on Query Store and its wait sampling on General Purpose, one after the other', () => {
+      const result = generateDatabaseTf({
+        ...baseConfig,
+        database: { ...baseConfig.database, tier: 'GP_Standard_D2s_v3' },
+      });
+
+      expect(result).toContain('name       = "pg_qs.query_capture_mode"');
+      expect(result).toContain('value      = "top"');
+      expect(result).toContain(
+        'name       = "pgms_wait_sampling.query_capture_mode"',
+      );
+      expect(result).toContain(
+        'depends_on = [azurerm_postgresql_flexible_server_configuration.query_store]',
+      );
+    });
+  });
+
   describe('PostgreSQL Flexible Server', () => {
     it('should create Flexible Server resource', () => {
       const result = generateDatabaseTf(baseConfig);

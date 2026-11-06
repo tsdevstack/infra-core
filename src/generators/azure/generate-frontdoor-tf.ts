@@ -5,6 +5,7 @@
 
 import type { AzureInfraConfig } from '../../types/config.ts';
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
+import { AZURE_APP_SERVICE_HEALTH_CHECK } from '../../constants/azure-app-service.ts';
 
 export function generateFrontdoorTf(config: AzureInfraConfig): string {
   const nextjsEntries = Object.entries(config.frontends);
@@ -77,7 +78,9 @@ resource "azurerm_cdn_frontdoor_endpoint" "spa_${toTerraformId(name)}" {
         ].join('\n')
       : '';
 
-  // Next.js origin groups
+  // Next.js origin groups. The probe asks the health route, not the home
+  // page: rendering a page twice a minute per Front Door location costs CPU,
+  // and the telemetry package leaves /health out of traces.
   const nextjsOriginGroups = nextjsEntries
     .map(
       ([name]) => `
@@ -92,7 +95,7 @@ resource "azurerm_cdn_frontdoor_origin_group" "nextjs_${toTerraformId(name)}" {
   }
 
   health_probe {
-    path                = "/"
+    path                = "${AZURE_APP_SERVICE_HEALTH_CHECK.nextjsPath}"
     protocol            = "Https"
     interval_in_seconds = 30
     request_type        = "HEAD"
@@ -147,13 +150,13 @@ resource "azurerm_cdn_frontdoor_rule" "noindex" {
   name                      = "AddNoIndexHeader"
   cdn_frontdoor_rule_set_id = azurerm_cdn_frontdoor_rule_set.headers.id
   order                     = 1
-  behavior_on_match         = "Continue"
+  behaviour_on_match        = "Continue"
 
   actions {
-    response_header_action {
-      header_action = "Overwrite"
-      header_name   = "X-Robots-Tag"
-      value         = "noindex, nofollow"
+    modify_response_header {
+      operator     = "Overwrite"
+      header_name  = "X-Robots-Tag"
+      header_value = "noindex, nofollow"
     }
   }
 }`

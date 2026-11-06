@@ -80,6 +80,8 @@ export interface ServiceConfig {
   maxInstances: number;
   /** Database connection pool max — AWS only */
   dbPoolMax?: number;
+  /** LOG_LEVEL — AWS only (GCP and Azure set it at deploy) */
+  logLevel?: string;
 }
 
 /**
@@ -114,6 +116,8 @@ export interface WorkerConfig {
   service: string;
   /** Database connection pool max — AWS only */
   dbPoolMax?: number;
+  /** LOG_LEVEL — AWS only (GCP and Azure set it at deploy) */
+  logLevel?: string;
 }
 
 /**
@@ -306,6 +310,10 @@ export interface BaseInfraConfig {
   // Registry
   /** Map of all deployables (services + workers + kong) for container registry */
   allDeployables: Record<string, string>;
+
+  // Observability
+  /** Share of new traces kept (tracing.sampleRate, 0 to 1); default 1 */
+  traceSampleRate?: number;
 }
 
 // ---------------------------------------------------------------------------

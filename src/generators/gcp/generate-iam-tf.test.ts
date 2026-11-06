@@ -167,8 +167,21 @@ describe('generateIamTf', () => {
     it('should give Kong no secret access without runtime secrets', () => {
       const result = generateIamTf(singleService);
       expect(result).not.toContain('kong_secrets');
-      expect(result).not.toContain(
-        'member  = "serviceAccount:${google_service_account.kong.email}"',
+      // Kong's one role: writing traces (its collector sidecar)
+      expect(
+        result.split(
+          'member  = "serviceAccount:${google_service_account.kong.email}"',
+        ),
+      ).toHaveLength(2);
+      expect(result).toContain(
+        'resource "google_project_iam_member" "kong_traces" {\n  project = var.gcp_project_id\n  role    = "roles/telemetry.tracesWriter"',
+      );
+    });
+
+    it('should let every runtime account write traces', () => {
+      const result = generateIamTf(singleService);
+      expect(result).toContain(
+        'resource "google_project_iam_member" "runtime_traces" {\n  for_each = toset(local.services)\n\n  project = var.gcp_project_id\n  role    = "roles/telemetry.tracesWriter"\n  member  = "serviceAccount:${google_service_account.runtime[each.key].email}"',
       );
     });
 

@@ -11,3 +11,10 @@ export const ECS_MIGRATION_CONTAINER_NAME = 'migration';
  * recorded; reading it once turned successful migrations into failures.
  */
 export const ECS_TASK_EXIT_CODE_GRACE_POLLS = 6;
+
+/**
+ * Days CloudWatch keeps a migration's log lines (`/ecs/{name}-migration`),
+ * the same as service logs. The CLI creates that group, not Terraform, so
+ * the CLI sets its retention.
+ */
+export const ECS_MIGRATION_LOG_RETENTION_DAYS = 30;

@@ -135,6 +135,12 @@ describe('generateDatabaseTf', () => {
         'vpc_security_group_ids = [aws_security_group.rds.id]',
       );
     });
+
+    it('should record SQL statistics per query for the free 7 days', () => {
+      const result = generateDatabaseTf();
+      expect(result).toContain('performance_insights_enabled          = true');
+      expect(result).toContain('performance_insights_retention_period = 7');
+    });
   });
 
   describe('secrets manager', () => {

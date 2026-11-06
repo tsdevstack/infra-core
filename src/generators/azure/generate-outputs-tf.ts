@@ -170,6 +170,11 @@ output "container_apps_acr_identity_client_id" {
   value       = azurerm_user_assigned_identity.container_apps.client_id
 }
 
+output "otlp_traces_url" {
+  description = "Where services, workers, Next.js and Kong send spans (OTEL_EXPORTER_OTLP_TRACES_ENDPOINT)"
+  value       = local.otlp_traces_url
+}
+
 output "service_secrets_identities" {
   description = "Each backend service's Key Vault identity (resource ID, and client ID for AZURE_SECRETS_CLIENT_ID)"
   value = {

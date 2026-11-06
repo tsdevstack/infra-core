@@ -107,6 +107,28 @@ describe('generateIamRolesTf', () => {
     });
   });
 
+  describe('X-Ray traces', () => {
+    const xray =
+      'Action   = ["xray:PutTraceSegments", "xray:PutSpans", "xray:PutSpansForIndexing"]';
+
+    it('should let every service task role, Kong included, send traces', () => {
+      const result = generateIamRolesTf();
+      expect(result).toContain(
+        'resource "aws_iam_role_policy" "task_traces" {\n  for_each = var.services\n',
+      );
+      expect(result).toContain('role = aws_iam_role.task[each.key].id');
+      expect(result).toContain(xray);
+    });
+
+    it('should let every Next.js task role send traces', () => {
+      const result = generateIamRolesTf();
+      expect(result).toContain(
+        'resource "aws_iam_role_policy" "nextjs_task_traces" {\n  for_each = var.nextjs_services\n',
+      );
+      expect(result.split(xray)).toHaveLength(3);
+    });
+  });
+
   describe('header comment', () => {
     it('should include generation comment', () => {
       const result = generateIamRolesTf();

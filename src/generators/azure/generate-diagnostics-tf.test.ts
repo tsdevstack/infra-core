@@ -102,6 +102,29 @@ describe('generateDiagnosticsTf', () => {
     });
   });
 
+  describe('Container Apps diagnostics', () => {
+    it('should send console and system logs to resource-specific tables', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      const block = result.slice(
+        result.indexOf(
+          'resource "azurerm_monitor_diagnostic_setting" "container_apps"',
+        ),
+        result.indexOf(
+          'resource "azurerm_monitor_diagnostic_setting" "postgres"',
+        ),
+      );
+      expect(block).toContain(
+        'target_resource_id             = azurerm_container_app_environment.main.id',
+      );
+      expect(block).toContain(
+        'log_analytics_workspace_id     = azurerm_log_analytics_workspace.main.id',
+      );
+      expect(block).toContain('log_analytics_destination_type = "Dedicated"');
+      expect(block).toContain('category = "ContainerAppConsoleLogs"');
+      expect(block).toContain('category = "ContainerAppSystemLogs"');
+    });
+  });
+
   describe('Kong App Service diagnostics', () => {
     it('should create Kong diagnostic setting', () => {
       const result = generateDiagnosticsTf(baseConfig);
@@ -133,6 +156,14 @@ describe('generateDiagnosticsTf', () => {
     it('should enable AppServiceAuditLogs', () => {
       const result = generateDiagnosticsTf(baseConfig);
       expect(result).toContain('category = "AppServiceAuditLogs"');
+    });
+
+    it('should enable AppServicePlatformLogs', () => {
+      const result = generateDiagnosticsTf(baseConfig);
+      const kongBlock = result.slice(
+        result.indexOf('resource "azurerm_monitor_diagnostic_setting" "kong"'),
+      );
+      expect(kongBlock).toContain('category = "AppServicePlatformLogs"');
     });
   });
 

@@ -42,7 +42,12 @@ describe('generateMainTf', () => {
 
     it('should include google provider version', () => {
       const result = generateMainTf(baseConfig);
-      expect(result).toContain('version = "~> 5.0"');
+      expect(result).toContain('version = "~> 8.9"');
+    });
+
+    it('should not add the Terraform attribution label to new resources', () => {
+      const result = generateMainTf(baseConfig);
+      expect(result).toContain('add_terraform_attribution_label = false');
     });
   });
 

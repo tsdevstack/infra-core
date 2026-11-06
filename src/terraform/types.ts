@@ -3,13 +3,7 @@
  */
 
 export type TerraformCommand =
-  | 'init'
-  | 'plan'
-  | 'apply'
-  | 'destroy'
-  | 'output'
-  | 'force-unlock'
-  | 'import';
+  'init' | 'plan' | 'apply' | 'destroy' | 'output' | 'force-unlock' | 'import';
 
 export interface TerraformExecuteOptions {
   /** Directory containing .tf files */
@@ -26,6 +20,8 @@ export interface TerraformExecuteOptions {
   varFile?: string;
   /** Reconfigure backend (for init command) */
   reconfigure?: boolean;
+  /** Upgrade providers past the lock file (for init command, only on the user's request) */
+  upgrade?: boolean;
   /** Lock ID for force-unlock command */
   lockId?: string;
   /** Resource address for import command (e.g., "azurerm_cdn_frontdoor_custom_domain.app") */

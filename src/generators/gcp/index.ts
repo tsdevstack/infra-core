@@ -5,6 +5,7 @@
 export { generateMainTf } from './generate-main-tf.ts';
 export { generateVariablesTf } from './generate-variables-tf.ts';
 export { generateNetworkTf } from './generate-network-tf.ts';
+export { generateDashboardTf } from './generate-dashboard-tf.ts';
 export { generateDatabaseTf } from './generate-database-tf.ts';
 export { generateRedisTf } from './generate-redis-tf.ts';
 export { generateIamTf } from './generate-iam-tf.ts';

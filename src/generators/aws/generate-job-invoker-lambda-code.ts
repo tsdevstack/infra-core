@@ -8,7 +8,9 @@
  * Services always run at least one task on AWS, so no wake-up step is needed.
  *
  * This Lambda runs in VPC to resolve CloudMap DNS names.
- * EventBridge Scheduler triggers it with { serviceName, path } payload.
+ * EventBridge Scheduler triggers it with { serviceName, path, jobName }.
+ * Every line it writes starts with job=<name>, so each job's runs can be
+ * read on their own (infra:logs).
  */
 
 export function generateJobInvokerLambdaCode(): string {
@@ -23,18 +25,22 @@ const NAMESPACE = process.env.CLOUDMAP_NAMESPACE;
 const JOB_SECRET_ARN = process.env.JOB_SECRET_ARN;
 
 exports.handler = async (event) => {
-  console.log('Job invocation received:', JSON.stringify(event, null, 2));
+  const { serviceName, path, jobName } = event;
 
-  const { serviceName, path } = event;
+  // Every line starts with job=<name>: infra:logs reads a job's runs by it
+  const job = jobName || \`\${serviceName}\${path}\`;
+  const log = (message) => console.log(\`job=\${job} \${message}\`);
+  const logError = (message) => console.error(\`job=\${job} \${message}\`);
 
   if (!serviceName || !path) {
-    console.error('Missing serviceName or path in event');
+    logError('Run failed: the event has no serviceName or path');
     return {
       statusCode: 400,
       body: JSON.stringify({ error: 'Missing serviceName or path' }),
     };
   }
 
+  const started = Date.now();
   try {
     // Get job auth secret
     const { SecretString } = await secrets.send(
@@ -47,7 +53,7 @@ exports.handler = async (event) => {
 
     // Build URL using CloudMap DNS
     const url = \`http://\${serviceName}.\${NAMESPACE}:8080\${path}\`;
-    console.log('Calling:', url);
+    log(\`Run started: POST \${url}\`);
 
     // Make HTTP request to service
     const response = await fetch(url, {
@@ -56,24 +62,31 @@ exports.handler = async (event) => {
         'Content-Type': 'application/json',
         'X-Job-Secret': SecretString,
       },
-      // 5 minute timeout for long-running jobs
-      signal: AbortSignal.timeout(300000),
+      // Below the function's 300 s timeout, so a hung job still logs its end
+      signal: AbortSignal.timeout(290000),
     });
 
     const responseText = await response.text();
-    console.log('Response status:', response.status);
-    console.log('Response body:', responseText.substring(0, 1000));
 
     if (!response.ok) {
-      throw new Error(\`Job failed with status \${response.status}: \${responseText}\`);
+      logError(
+        \`Run finished: \${response.status} (\${responseText.substring(0, 1000)})\`
+      );
+      // Already logged; the throw makes EventBridge retry
+      const failure = new Error(\`Job failed with status \${response.status}\`);
+      failure.logged = true;
+      throw failure;
     }
 
+    log(\`Run finished: \${response.status} in \${Date.now() - started}ms\`);
     return {
       statusCode: response.status,
       body: responseText,
     };
   } catch (error) {
-    console.error('Job invocation failed:', error);
+    if (!error?.logged) {
+      logError(\`Run failed: \${error instanceof Error ? error.message : String(error)}\`);
+    }
     throw error; // Rethrow to trigger retry policy
   }
 };

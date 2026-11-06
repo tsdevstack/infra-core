@@ -47,7 +47,9 @@ resource "azurerm_subnet" "postgres" {
   address_prefixes     = ["10.0.2.0/28"]
   # Azure adds this endpoint when the first server is created in the subnet
   # (WAL uploads to Azure Storage); declared so deploys do not remove it
-  service_endpoints    = ["Microsoft.Storage"]
+  service_endpoint {
+    service = "Microsoft.Storage"
+  }
 
   delegation {
     name = "postgres-delegation"
@@ -108,8 +110,7 @@ resource "azurerm_private_dns_zone" "redis" {
 
 resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
   name                  = "postgres-vnet-link"
-  resource_group_name   = data.azurerm_resource_group.main.name
-  private_dns_zone_name = azurerm_private_dns_zone.postgres.name
+  private_dns_zone_id   = azurerm_private_dns_zone.postgres.id
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
   tags                  = local.tags
@@ -117,8 +118,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "postgres" {
 
 resource "azurerm_private_dns_zone_virtual_network_link" "redis" {
   name                  = "redis-vnet-link"
-  resource_group_name   = data.azurerm_resource_group.main.name
-  private_dns_zone_name = azurerm_private_dns_zone.redis.name
+  private_dns_zone_id   = azurerm_private_dns_zone.redis.id
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
   tags                  = local.tags
@@ -134,8 +134,7 @@ resource "azurerm_private_dns_zone" "container_apps" {
 
 resource "azurerm_private_dns_zone_virtual_network_link" "container_apps" {
   name                  = "container-apps-vnet-link"
-  resource_group_name   = data.azurerm_resource_group.main.name
-  private_dns_zone_name = azurerm_private_dns_zone.container_apps.name
+  private_dns_zone_id   = azurerm_private_dns_zone.container_apps.id
   virtual_network_id    = azurerm_virtual_network.main.id
   registration_enabled  = false
   tags                  = local.tags
@@ -144,8 +143,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "container_apps" {
 # Wildcard A record pointing to the CAE internal static IP
 resource "azurerm_private_dns_a_record" "container_apps_wildcard" {
   name                = "*"
-  zone_name           = azurerm_private_dns_zone.container_apps.name
-  resource_group_name = data.azurerm_resource_group.main.name
+  private_dns_zone_id = azurerm_private_dns_zone.container_apps.id
   ttl                 = 300
   records             = [azurerm_container_app_environment.main.static_ip_address]
 }

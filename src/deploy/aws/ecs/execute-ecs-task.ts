@@ -16,6 +16,7 @@ import {
   CloudWatchLogsClient,
   GetLogEventsCommand,
   CreateLogGroupCommand,
+  PutRetentionPolicyCommand,
   type OutputLogEvent,
 } from '@aws-sdk/client-cloudwatch-logs';
 import type { InfraCoreRuntime } from '../../../types/runtime.ts';
@@ -24,6 +25,7 @@ import { InfraCoreError } from '../../../runtime/infra-core-error.ts';
 import { sleep } from '../../../utils/async/sleep.ts';
 import {
   ECS_MIGRATION_CONTAINER_NAME,
+  ECS_MIGRATION_LOG_RETENTION_DAYS,
   ECS_TASK_EXIT_CODE_GRACE_POLLS,
 } from '../../../constants/aws-ecs-task.ts';
 import { readEcsTaskOutcome } from './read-ecs-task-outcome.ts';
@@ -90,6 +92,21 @@ export async function executeEcsTask(
       // Log but don't fail - the task might still work if log group exists
       runtime.logger.warn(`Could not create log group: ${logGroup}`);
     }
+  }
+
+  // Every run, so groups created before (with no retention) get it too
+  try {
+    await cloudwatch.send(
+      new PutRetentionPolicyCommand({
+        logGroupName: logGroup,
+        retentionInDays: ECS_MIGRATION_LOG_RETENTION_DAYS,
+      }),
+    );
+  } catch {
+    // The migration doesn't depend on it
+    runtime.logger.warn(
+      `Could not set the retention of ${logGroup} (${ECS_MIGRATION_LOG_RETENTION_DAYS} days); its lines are kept until you set one`,
+    );
   }
 
   // Register a task definition for the migration

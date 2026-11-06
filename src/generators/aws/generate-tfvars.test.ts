@@ -84,6 +84,26 @@ describe('generateTfvars', () => {
       expect(result).toContain('dbPoolMax    = 15');
     });
 
+    it('should set each service log level, info when none is given', () => {
+      const config: AWSInfraConfig = {
+        ...baseConfig,
+        services: {
+          'auth-service': {
+            cpu: 256,
+            memory: '512',
+            minInstances: 1,
+            maxInstances: 4,
+            dbPoolMax: 15,
+            logLevel: 'debug',
+          },
+          kong: { cpu: 256, memory: '512', minInstances: 1, maxInstances: 2 },
+        },
+      };
+      const result = generateTfvars(config);
+      expect(result).toContain('logLevel     = "debug"');
+      expect(result).toContain('logLevel     = "info"');
+    });
+
     it('should handle scale-to-zero services', () => {
       const config: AWSInfraConfig = {
         ...baseConfig,
@@ -126,6 +146,7 @@ describe('generateTfvars', () => {
       expect(result).toContain('"auth-worker" = {');
       expect(result).toContain('service      = "auth-service"');
       expect(result).toContain('dbPoolMax    = 8');
+      expect(result).toContain('logLevel     = "info"');
       expect(result).toContain('minInstances = 1');
       expect(result).toContain('maxInstances = 3');
     });

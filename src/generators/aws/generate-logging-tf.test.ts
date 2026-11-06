@@ -96,6 +96,21 @@ describe('generateLoggingTf', () => {
         'resource_arn            = aws_wafv2_web_acl.main.arn',
       );
     });
+
+    it('should redact the credential headers', () => {
+      const config = result.slice(
+        result.indexOf('resource "aws_wafv2_web_acl_logging_configuration"'),
+      );
+      for (const header of [
+        'authorization',
+        'cookie',
+        'x-tsdevstack-frontend-token',
+      ]) {
+        expect(config).toContain(
+          `  redacted_fields {\n    single_header {\n      name = "${header}"\n    }\n  }`,
+        );
+      }
+    });
   });
 
   describe('header comment', () => {

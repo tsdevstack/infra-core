@@ -65,7 +65,10 @@ resource "aws_db_instance" "main" {
   skip_final_snapshot       = false
   final_snapshot_identifier = "\${var.project_name}-db-final-\${random_id.db_final_snapshot.hex}"
 
-  performance_insights_enabled = false
+  # SQL statistics per query (Database Insights, standard mode); 7 days of
+  # history are free. Turning it on or off doesn't restart the database.
+  performance_insights_enabled          = true
+  performance_insights_retention_period = 7
 
   tags = { Name = "\${var.project_name}-db" }
 }

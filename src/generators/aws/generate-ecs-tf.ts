@@ -48,9 +48,12 @@ export function generateEcsTf(): string {
 resource "aws_ecs_cluster" "main" {
   name = "\${var.project_name}-cluster"
 
+  # Container Insights off: it bills per metric (tens of dollars a month for a
+  # small environment). The dashboard uses the free AWS/ECS CPU and memory
+  # metrics; restarts and crashes show in infra:logs as platform lines.
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "disabled"
   }
 
   tags = { Name = "\${var.project_name}-cluster" }
@@ -125,7 +128,13 @@ resource "aws_ecs_task_definition" "service" {
         # trusted from any peer (only the ALB and this project's tasks reach Kong).
         # infra:deploy-kong sets the same values on every deploy.
 ${kongClientIpEnv}
-      ] : []
+      ] : [
+        { name = "LOG_LEVEL", value = each.value.logLevel },
+        # Traces to X-Ray (@tsdevstack/telemetry); the log group lets X-Ray
+        # find a trace's log lines
+        { name = "TRACE_SAMPLE_RATE", value = tostring(var.trace_sample_rate) },
+        { name = "OTEL_RESOURCE_ATTRIBUTES", value = "aws.log.group.names=/ecs/\${var.project_name}/\${each.key}" },
+      ]
     )
 
     # Note: Secrets are injected via CLI deployment, not hard-coded here
@@ -283,11 +292,14 @@ resource "aws_ecs_task_definition" "worker" {
       { name = "NODE_ENV", value = "production" },
       { name = "SERVICE_NAME", value = each.value.service },
       { name = "WORKER_NAME", value = each.key },
+      { name = "LOG_LEVEL", value = each.value.logLevel },
       { name = "CLOUD_PROVIDER", value = "aws" },
       { name = "SECRETS_PROVIDER", value = "aws" },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "PROJECT_NAME", value = var.project_name },
       { name = "DB_POOL_MAX", value = tostring(each.value.dbPoolMax) },
+      { name = "TRACE_SAMPLE_RATE", value = tostring(var.trace_sample_rate) },
+      { name = "OTEL_RESOURCE_ATTRIBUTES", value = "aws.log.group.names=/ecs/\${var.project_name}/\${each.key}" },
     ]
 
     logConfiguration = {
@@ -431,6 +443,10 @@ resource "aws_ecs_task_definition" "nextjs" {
       { name = "SECRETS_PROVIDER", value = "aws" },
       { name = "AWS_REGION", value = var.aws_region },
       { name = "PROJECT_NAME", value = var.project_name },
+      # Traces to X-Ray (@tsdevstack/telemetry, instrumentation.ts)
+      { name = "TELEMETRY_PROVIDER", value = "aws" },
+      { name = "TRACE_SAMPLE_RATE", value = tostring(var.trace_sample_rate) },
+      { name = "OTEL_RESOURCE_ATTRIBUTES", value = "aws.log.group.names=/ecs/\${var.project_name}/\${each.key}" },
       # The visitor's address, from the CloudFront function header (cloudfront.tf);
       # infra:deploy-services sets it on every deploy too
 ${nextjsClientIpEnv}

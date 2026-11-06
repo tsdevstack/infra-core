@@ -49,6 +49,8 @@ resource "azurerm_storage_account" "storage" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   min_tls_version          = "TLS1_2"
+  # Containers are private; services use SAS links
+  allow_nested_items_to_be_public = false
   tags                     = local.tags
 
   blob_properties {

@@ -42,7 +42,7 @@ describe('generateMainTf', () => {
 
     it('should include aws provider version', () => {
       const result = generateMainTf(baseConfig);
-      expect(result).toContain('version = "~> 5.0"');
+      expect(result).toContain('version = "~> 6.71"');
     });
 
     it('should include random provider for password generation', () => {

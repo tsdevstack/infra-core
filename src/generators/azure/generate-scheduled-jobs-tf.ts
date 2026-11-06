@@ -86,9 +86,12 @@ export function generateScheduledJobsTf(config: AzureInfraConfig): string {
     '      cpu    = 0.25',
     '      memory = "0.5Gi"',
     '',
+    // The run's log shows the response and its status (-S keeps curl's own
+    // errors; --fail-with-body still fails the run on 4xx and 5xx). %%{ is
+    // HCL's escape for a literal %{.
     '      command = [',
     '        "/bin/sh", "-c",',
-    `        "curl -sfL --retry 3 --retry-delay 15 --retry-all-errors -X \${each.value.method} -H 'Content-Type: application/json' -H 'X-Job-Secret: $(JOB_SECRET)' --max-time \${each.value.timeout} https://\${var.project_name}-\${each.value.service_name}.\${azurerm_container_app_environment.main.default_domain}\${each.value.path}"`,
+    `        "curl -sSL --fail-with-body -w ' HTTP %%{http_code} in %%{time_total}s' --retry 3 --retry-delay 15 --retry-all-errors -X \${each.value.method} -H 'Content-Type: application/json' -H 'X-Job-Secret: $(JOB_SECRET)' --max-time \${each.value.timeout} https://\${var.project_name}-\${each.value.service_name}.\${azurerm_container_app_environment.main.default_domain}\${each.value.path}"`,
     '      ]',
     '',
     '      env {',

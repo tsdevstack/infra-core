@@ -11,6 +11,7 @@ export { extractImportTargets } from './extract-import-targets.ts';
 export type { ImportTarget } from './extract-import-targets.ts';
 export { detectRouteAssociationError } from './detect-route-association-error.ts';
 export { isCapacityOnlyFailure } from './is-capacity-only-failure.ts';
+export { isProviderLockMismatch } from './is-provider-lock-mismatch.ts';
 export { extractCnameConflicts } from './aws/extract-cname-conflicts.ts';
 export type { CnameConflictTarget } from './aws/extract-cname-conflicts.ts';
 export type {

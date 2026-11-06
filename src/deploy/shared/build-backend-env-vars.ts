@@ -12,6 +12,12 @@ interface BackendEnvVarsConfig {
   poolMax: number;
   /** AWS region (required for AWS) */
   awsRegion?: string;
+  /** LOG_LEVEL (pino level); the service's logger defaults to info without it */
+  logLevel?: string;
+  /** A worker's own name (auth-worker): its log lines carry it */
+  workerName?: string;
+  /** TRACE_SAMPLE_RATE (tracing.sampleRate); the service keeps every trace without it */
+  traceSampleRate?: number;
 }
 
 export function buildBackendEnvVars(
@@ -23,6 +29,16 @@ export function buildBackendEnvVars(
     PROJECT_NAME: config.projectName,
     DB_POOL_MAX: String(config.poolMax),
   };
+
+  if (config.logLevel) {
+    envVars.LOG_LEVEL = config.logLevel;
+  }
+  if (config.workerName) {
+    envVars.WORKER_NAME = config.workerName;
+  }
+  if (config.traceSampleRate !== undefined) {
+    envVars.TRACE_SAMPLE_RATE = String(config.traceSampleRate);
+  }
 
   if (config.provider === 'gcp') {
     envVars.GCP_PROJECT_ID = config.projectId;

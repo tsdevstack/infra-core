@@ -229,7 +229,7 @@ describe('generateFrontdoorTf', () => {
       expect(apiBlock).toContain('path                = "/status"');
     });
 
-    it('should configure nextjs health probe with / path', () => {
+    it('should configure nextjs health probe with the /health path', () => {
       const config: AzureInfraConfig = {
         ...baseConfig,
         frontends: {
@@ -248,7 +248,8 @@ describe('generateFrontdoorTf', () => {
           'resource "azurerm_cdn_frontdoor_origin_group" "nextjs_frontend"',
         ),
       );
-      expect(nextjsBlock).toContain('path                = "/"');
+      // The health route, not the home page (no render, no trace per probe)
+      expect(nextjsBlock).toContain('path                = "/health"');
     });
 
     it('should use Https protocol for health probes', () => {
@@ -714,8 +715,12 @@ describe('generateFrontdoorTf', () => {
 
     it('should add X-Robots-Tag header action', () => {
       const result = generateFrontdoorTf({ ...baseConfig, noIndex: true });
-      expect(result).toContain('header_name   = "X-Robots-Tag"');
-      expect(result).toContain('value         = "noindex, nofollow"');
+      expect(result).toContain('behaviour_on_match        = "Continue"');
+      expect(result).toContain('modify_response_header {');
+      expect(result).toContain('operator     = "Overwrite"');
+      expect(result).toContain('header_name  = "X-Robots-Tag"');
+      expect(result).toContain('header_value = "noindex, nofollow"');
+      expect(result).not.toContain('response_header_action');
     });
 
     it('should add rule set IDs to API route when noIndex is true', () => {

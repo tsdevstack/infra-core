@@ -1,8 +1,9 @@
 /**
  * Generate diagnostics.tf with Azure Monitor diagnostic settings
  *
- * Sends logs from PostgreSQL and App Service to the shared
- * Log Analytics workspace (created in container-apps-env.tf).
+ * Sends logs from Front Door, PostgreSQL, the Container Apps environment
+ * and the App Services to the shared Log Analytics workspace (created in
+ * container-apps-env.tf).
  */
 
 import type { AzureInfraConfig } from '../../types/config.ts';
@@ -47,6 +48,28 @@ resource "azurerm_monitor_diagnostic_setting" "frontdoor" {
 
   enabled_log {
     category = "FrontDoorWebApplicationFirewallLog"
+  }
+}
+
+# =============================================================================
+# Container Apps Diagnostic Settings
+# =============================================================================
+# Services, workers, migrations and scheduled jobs: their own output
+# (ContainerAppConsoleLogs) and the platform's events (ContainerAppSystemLogs),
+# in resource-specific tables
+
+resource "azurerm_monitor_diagnostic_setting" "container_apps" {
+  name                           = "container-apps-diagnostics"
+  target_resource_id             = azurerm_container_app_environment.main.id
+  log_analytics_workspace_id     = azurerm_log_analytics_workspace.main.id
+  log_analytics_destination_type = "Dedicated"
+
+  enabled_log {
+    category = "ContainerAppConsoleLogs"
+  }
+
+  enabled_log {
+    category = "ContainerAppSystemLogs"
   }
 }
 
@@ -100,6 +123,11 @@ resource "azurerm_monitor_diagnostic_setting" "${tfId}" {
 
   enabled_log {
     category = "AppServiceAuditLogs"
+  }
+
+  # Container starts, stops and failures to start
+  enabled_log {
+    category = "AppServicePlatformLogs"
   }
 }`;
 }

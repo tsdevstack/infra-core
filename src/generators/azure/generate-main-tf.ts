@@ -3,6 +3,7 @@
  */
 
 import type { AzureInfraConfig } from '../../types/config.ts';
+import { TERRAFORM_PROVIDER_VERSIONS } from '../../constants/index.ts';
 
 export function generateMainTf(config: AzureInfraConfig): string {
   const { storageAccountName, environment, projectName } = config;
@@ -16,11 +17,15 @@ terraform {
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 4.50"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.azurerm}"
+    }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.azapi}"
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.0"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.random}"
     }
   }
 
@@ -41,6 +46,11 @@ provider "azurerm" {
 
   subscription_id                 = var.subscription_id
   resource_provider_registrations = "none"
+}
+
+# Resources azurerm can't create yet (tracing.tf); signs in like azurerm
+provider "azapi" {
+  subscription_id = var.subscription_id
 }
 
 # =============================================================================
