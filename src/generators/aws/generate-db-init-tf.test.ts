@@ -2,6 +2,18 @@ import { describe, it, expect } from '@rstest/core';
 import { generateDbInitTf } from './generate-db-init-tf';
 
 describe('generateDbInitTf', () => {
+  describe('Secrets access', () => {
+    it('should let db-init write both database URL secrets of each service', () => {
+      const result = generateDbInitTf();
+      expect(result).toContain(
+        '"arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.project_name}-*-DATABASE_URL*"',
+      );
+      expect(result).toContain(
+        '"arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.project_name}-*-MIGRATION_DATABASE_URL*"',
+      );
+    });
+  });
+
   describe('ECR repository', () => {
     it('should create ECR repository', () => {
       const result = generateDbInitTf();

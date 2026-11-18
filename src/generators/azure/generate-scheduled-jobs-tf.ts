@@ -6,6 +6,10 @@
  */
 
 import type { AzureInfraConfig } from '../../types/config.ts';
+import {
+  DEFAULT_SCHEDULED_JOB_METHOD,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
+} from '../../constants/index.ts';
 
 /**
  * Generate scheduled-jobs.tf content
@@ -33,8 +37,9 @@ export function generateScheduledJobsTf(config: AzureInfraConfig): string {
     '    schedule       = string',
     '    service_name   = string',
     '    path           = string',
-    '    method         = optional(string, "POST")',
-    '    timeout        = optional(number, 300)',
+    `    method         = optional(string, "${DEFAULT_SCHEDULED_JOB_METHOD}")`,
+    // Container Apps ingress ends every request at 240 s
+    `    timeout        = optional(number, ${SCHEDULED_JOB_HTTP_TIMEOUT.azure.default})`,
     '  }))',
     '  default = {}',
     '}',

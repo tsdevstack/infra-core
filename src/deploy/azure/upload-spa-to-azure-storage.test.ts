@@ -5,9 +5,14 @@ const mockUpload = rs.fn();
 const mockDeleteBlob = rs.fn();
 const mockGetBlockBlobClient = rs.fn(() => ({ upload: mockUpload }));
 
+interface MockBlob {
+  name: string;
+  properties?: { lastModified?: Date };
+}
+
 function createMockListBlobsFlat(
-  blobs: { name: string }[],
-): () => AsyncIterable<{ name: string }> {
+  blobs: MockBlob[],
+): () => AsyncIterable<MockBlob> {
   return () => ({
     [Symbol.asyncIterator]: async function* () {
       for (const blob of blobs) {
@@ -184,7 +189,35 @@ describe('uploadSpaToAzureStorage', () => {
       credential: mockCredential,
     });
 
-    expect(result).toEqual({ filesUploaded: 2, filesDeleted: 1 });
+    expect(result).toEqual({ filesUploaded: 2, filesDeleted: 1, filesKept: 0 });
+  });
+
+  it('should keep a blob left out of the build until a day after its last upload', async () => {
+    const hour = 60 * 60 * 1000;
+    rs.mocked(getAllFiles).mockReturnValue(['index.html']);
+    mockListBlobsFlat = createMockListBlobsFlat([
+      { name: 'index.html', properties: { lastModified: new Date() } },
+      {
+        name: 'assets/page-old1.js',
+        properties: { lastModified: new Date(Date.now() - hour) },
+      },
+      {
+        name: 'assets/page-old2.js',
+        properties: { lastModified: new Date(Date.now() - 48 * hour) },
+      },
+    ]);
+
+    const result = await uploadSpaToAzureStorage(mockRuntime, {
+      storageAccountName: 'myappdev',
+      resourceGroupName: 'myapp-dev-rg',
+      sourceDir: '/dist',
+      subscriptionId: 'sub-123',
+      credential: mockCredential,
+    });
+
+    expect(mockDeleteBlob).toHaveBeenCalledTimes(1);
+    expect(mockDeleteBlob).toHaveBeenCalledWith('assets/page-old2.js');
+    expect(result).toEqual({ filesUploaded: 1, filesDeleted: 1, filesKept: 1 });
   });
 
   it('should delete stale blobs not in local build', async () => {

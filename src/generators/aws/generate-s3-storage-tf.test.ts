@@ -77,6 +77,24 @@ describe('generateS3StorageTf', () => {
     });
   });
 
+  describe('bucket policy', () => {
+    it('should refuse requests without HTTPS on every bucket, after the access block', () => {
+      const result = generateS3StorageTf(baseConfig);
+      const start = result.indexOf('resource "aws_s3_bucket_policy" "storage"');
+      expect(start).toBeGreaterThan(-1);
+      const policy = result.slice(start, result.indexOf('\n}\n', start));
+
+      expect(policy).toContain('for_each = local.storage_buckets');
+      expect(policy).toContain(
+        'depends_on = [aws_s3_bucket_public_access_block.storage]',
+      );
+      expect(policy).toContain('Sid       = "DenyInsecureTransport"');
+      expect(policy).toContain(
+        'Resource  = [aws_s3_bucket.storage[each.key].arn, "${aws_s3_bucket.storage[each.key].arn}/*"]',
+      );
+    });
+  });
+
   describe('CORS configuration', () => {
     it('should allow all origins', () => {
       const result = generateS3StorageTf(baseConfig);
@@ -160,6 +178,71 @@ describe('generateS3StorageTf', () => {
     it("should report each bucket's own region", () => {
       const result = generateS3StorageTf(baseConfig);
       expect(result).toContain('region = bucket.bucket_region');
+    });
+  });
+
+  describe('access logs', () => {
+    const result = generateS3StorageTf(baseConfig);
+    const trail = result.slice(
+      result.indexOf('resource "aws_cloudtrail" "storage_access"'),
+    );
+
+    it('should log the objects of the storage buckets only, data events only', () => {
+      expect(trail).toContain('equals = ["Data"]');
+      expect(trail).toContain('equals = ["AWS::S3::Object"]');
+      expect(trail).toContain(
+        'starts_with = [for bucket in aws_s3_bucket.storage : "${bucket.arn}/"]',
+      );
+      expect(trail).not.toContain('include_management_events');
+      expect(trail).toContain('include_global_service_events = false');
+    });
+
+    it('should send them to CloudWatch Logs, kept 30 days', () => {
+      expect(result).toContain(
+        'name              = "/aws/cloudtrail/${var.project_name}-storage-access"',
+      );
+      expect(result).toContain('retention_in_days = 30');
+      expect(trail).toContain(
+        'cloud_watch_logs_group_arn    = "${aws_cloudwatch_log_group.storage_access.arn}:*"',
+      );
+      expect(trail).toContain(
+        'cloud_watch_logs_role_arn     = aws_iam_role.storage_access_trail.arn',
+      );
+    });
+
+    it('should let CloudTrail write only to that log group', () => {
+      const policy = result.slice(
+        result.indexOf('resource "aws_iam_role_policy" "storage_access_trail"'),
+        result.indexOf('resource "aws_cloudtrail" "storage_access"'),
+      );
+      expect(policy).toContain(
+        'Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]',
+      );
+      expect(policy).toContain(
+        'Resource = "${aws_cloudwatch_log_group.storage_access.arn}:*"',
+      );
+      expect(result).toContain(
+        'Principal = { Service = "cloudtrail.amazonaws.com" }',
+      );
+    });
+
+    it('should keep the S3 copy in the CloudTrail bucket, with its key', () => {
+      expect(trail).toContain(
+        'name                          = "${var.project_name}-storage-trail"',
+      );
+      expect(trail).toContain(
+        's3_bucket_name                = aws_s3_bucket.cloudtrail.id',
+      );
+      expect(trail).toContain(
+        'kms_key_id                    = aws_kms_key.cloudtrail.arn',
+      );
+      expect(trail).toContain('aws_s3_bucket_policy.cloudtrail,');
+    });
+
+    it('should log nothing without buckets', () => {
+      expect(generateS3StorageTf({ ...baseConfig, storageBuckets: [] })).toBe(
+        '',
+      );
     });
   });
 });

@@ -9,8 +9,11 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  naming: 'legacy',
   keyVaultName: 'myproject-dev-kv',
   serviceKeyVaults: {},
+  dbJobsKeyVault: 'test-dev-dbjobs',
+  databaseServiceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,

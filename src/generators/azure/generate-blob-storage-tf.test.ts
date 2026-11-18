@@ -9,8 +9,11 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  naming: 'legacy',
   keyVaultName: 'myproject-dev-kv',
   serviceKeyVaults: {},
+  dbJobsKeyVault: 'test-dev-dbjobs',
+  databaseServiceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -156,6 +159,17 @@ describe('generateBlobStorageTf', () => {
     it('should not let containers be made public', () => {
       const result = generateBlobStorageTf(baseConfig);
       expect(result).toContain('allow_nested_items_to_be_public = false');
+    });
+  });
+
+  describe('naming scheme', () => {
+    it('should name the storage account with the subscription suffix in the unique scheme', () => {
+      expect(
+        generateBlobStorageTf({ ...baseConfig, naming: 'unique' }),
+      ).toContain('storage_account_name = "myprojectdevst1cdb67"');
+      expect(generateBlobStorageTf(baseConfig)).toContain(
+        'storage_account_name = "myprojectdevstorage"',
+      );
     });
   });
 });

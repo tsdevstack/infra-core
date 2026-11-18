@@ -20,8 +20,10 @@
 import type {
   FrontendHostingType,
   GcpWafCustomRule,
+  NamingScheme,
   WafRateLimitConfig,
 } from '../../types/index.ts';
+import { buildGcpCloudRunName } from '../../utils/gcp/build-gcp-cloud-run-name.ts';
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
 import { toDnsAuthName } from '../../utils/gcp/to-dns-auth-name.ts';
 import { generateCustomWafRules } from './generate-custom-waf-rules.ts';
@@ -42,6 +44,10 @@ export interface FrontendServiceConfig {
 }
 
 export interface LoadBalancerConfig {
+  /** Project name (Cloud Run names of the frontends) */
+  projectName: string;
+  /** The environment's naming scheme (Cloud Run names of the frontends) */
+  naming: NamingScheme;
   /** API domain for Kong (e.g., "api.example.com") */
   apiDomain: string;
   /** Frontend services with their domains */
@@ -63,6 +69,8 @@ export interface LoadBalancerConfig {
  */
 export function generateLoadBalancerTf(config: LoadBalancerConfig): string {
   const {
+    projectName,
+    naming,
     apiDomain,
     frontendServices,
     customWafRules,
@@ -93,7 +101,7 @@ resource "google_compute_region_network_endpoint_group" "${toTerraformId(service
   region                = var.gcp_region
 
   cloud_run {
-    service = "${service.name}"
+    service = "${buildGcpCloudRunName(projectName, service.name, naming)}"
   }
 }`,
     )
@@ -175,6 +183,17 @@ resource "google_compute_backend_bucket" "${toTerraformId(service.name)}_spa_bac
     negative_caching  = true
     serve_while_stale = 86400
   }
+}
+
+# The SPA bucket is private: only the load balancer reads it (Cloud CDN cache
+# fills). Google creates this service agent with the project's first backend
+# bucket, hence the depends_on.
+resource "google_storage_bucket_iam_member" "${toTerraformId(service.name)}_spa_lb_reader" {
+  bucket = google_storage_bucket.${toTerraformId(service.name)}_spa.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:service-\${data.google_project.current.number}@https-lb.iam.gserviceaccount.com"
+
+  depends_on = [google_compute_backend_bucket.${toTerraformId(service.name)}_spa_backend]
 }`,
     )
     .join('\n');

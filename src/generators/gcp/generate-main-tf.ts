@@ -19,6 +19,10 @@ terraform {
       source  = "hashicorp/google"
       version = "${TERRAFORM_PROVIDER_VERSIONS.google}"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "${TERRAFORM_PROVIDER_VERSIONS.random}"
+    }
   }
 
   backend "gcs" {

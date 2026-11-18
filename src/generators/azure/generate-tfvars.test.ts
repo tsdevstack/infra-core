@@ -9,8 +9,11 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  naming: 'legacy',
   keyVaultName: 'myproject-dev-kv',
   serviceKeyVaults: {},
+  dbJobsKeyVault: 'test-dev-dbjobs',
+  databaseServiceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -76,6 +79,42 @@ describe('generateTfvars', () => {
     expect(result).toContain('path         = "/auth/jobs/cleanup-tokens"');
   });
 
+  it('should give a job without method or httpTimeout POST and 240 s (the ingress limit)', () => {
+    const result = generateTfvars({
+      ...baseConfig,
+      scheduledJobs: {
+        'cleanup-tokens': {
+          name: 'cleanup-tokens',
+          schedule: '0 */4 * * *',
+          targetService: 'auth-service',
+          endpoint: '/auth/jobs/cleanup-tokens',
+        },
+      },
+    });
+
+    expect(result).toContain('method       = "POST"');
+    expect(result).toContain('timeout      = 240');
+  });
+
+  it("should pass the job's own method and httpTimeout", () => {
+    const result = generateTfvars({
+      ...baseConfig,
+      scheduledJobs: {
+        'sync-prices': {
+          name: 'sync-prices',
+          schedule: '0 * * * *',
+          targetService: 'offers-service',
+          endpoint: '/jobs/sync-prices',
+          method: 'PUT',
+          httpTimeout: 120,
+        },
+      },
+    });
+
+    expect(result).toContain('method       = "PUT"');
+    expect(result).toContain('timeout      = 120');
+  });
+
   it('should NOT include database password placeholders (managed by random_password)', () => {
     const config = {
       ...baseConfig,
@@ -114,6 +153,23 @@ describe('generateTfvars', () => {
 
     it('should write an empty map without services', () => {
       expect(generateTfvars(baseConfig)).toContain('service_key_vaults = {}');
+    });
+
+    it("should set the database jobs' vault and the database services' vaults", () => {
+      const result = generateTfvars({
+        ...baseConfig,
+        dbJobsKeyVault: 'myproject-dev-dbjobs',
+        databaseServiceKeyVaults: {
+          'auth-service': 'myproject-dev-auth-1a2b3c4d',
+        },
+      });
+
+      expect(result).toContain(
+        'db_jobs_key_vault           = "myproject-dev-dbjobs"',
+      );
+      expect(result).toContain(
+        'database_service_key_vaults = {\n  "auth-service" = "myproject-dev-auth-1a2b3c4d"\n}',
+      );
     });
   });
 });

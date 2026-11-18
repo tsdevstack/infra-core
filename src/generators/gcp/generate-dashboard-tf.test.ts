@@ -6,8 +6,8 @@ interface Dashboard {
   mosaicLayout: {
     columns: number;
     tiles: Array<{
-      xPos: number;
-      yPos: number;
+      xPos?: number;
+      yPos?: number;
       width: number;
       height: number;
       widget: { title: string; xyChart?: unknown; logsPanel?: unknown };
@@ -85,10 +85,23 @@ describe('generateDashboardTf', () => {
         generateDashboardTf({ environment: 'dev', hasLoadBalancer: true }),
       ).mosaicLayout;
       for (const tile of tiles) {
-        expect(tile.xPos + tile.width).toBeLessThanOrEqual(columns);
+        expect((tile.xPos ?? 0) + tile.width).toBeLessThanOrEqual(columns);
       }
-      const positions = tiles.map((t) => `${t.xPos},${t.yPos}`);
+      const positions = tiles.map((t) => `${t.xPos ?? 0},${t.yPos ?? 0}`);
       expect(new Set(positions).size).toBe(positions.length);
+    });
+
+    it('should leave 0 positions out, as Cloud Monitoring stores them (no update on every plan)', () => {
+      const { tiles } = parse(
+        generateDashboardTf({ environment: 'dev', hasLoadBalancer: true }),
+      ).mosaicLayout;
+      for (const tile of tiles) {
+        expect(tile.xPos).not.toBe(0);
+        expect(tile.yPos).not.toBe(0);
+      }
+      expect(tiles[0].xPos).toBeUndefined();
+      expect(tiles[0].yPos).toBeUndefined();
+      expect(tiles[2].xPos).toBe(24);
     });
   });
 });

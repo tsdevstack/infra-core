@@ -19,6 +19,16 @@ const AZURE_POSTGRES_CAPACITY = `azurerm_private_endpoint.redis: Creation comple
 ╵
 Releasing state lock. This may take a few moments...`;
 
+// The App Service plan error of a real Azure deploy (2026-11-17), its
+// message as Azure's activity log recorded it, shortened
+const AZURE_APP_SERVICE_CAPACITY = `╷
+│ Error: creating App Service Plan (Subscription: "x"
+│ Resource Group Name: "rg"
+│ Server Farm Name: "app-dev-kong-plan"): performing CreateOrUpdate: unexpected status 409 (409 Conflict) with response: {"Code":"Conflict","Message":"No available instances to satisfy this request. App Service is attempting to increase capacity. Please retry your request later or consider enabling Async Scaling on your app service plan: aka.ms/async-scaling. If urgent, this can be mitigated by deploying this to a new resource group.","Target":null,"Details":[{"ErrorEntity":{"ExtendedCode":"03029"}}],"Innererror":null}
+│
+│   with azurerm_service_plan.kong,
+╵`;
+
 const AWS_RDS_CAPACITY = `╷
 │ Error: creating RDS DB Instance (app-dev-db): operation error RDS: CreateDBInstance, https response error StatusCode: 400, RequestID: abc, InsufficientDBInstanceCapacity: Cannot create a database instance because there is no capacity in the requested Availability Zone.
 │
@@ -59,6 +69,23 @@ describe('isCapacityOnlyFailure', () => {
       expect(
         isCapacityOnlyFailure('│ Error: x: Code="AllocationFailed"', 'azure'),
       ).toBe(true);
+    });
+
+    it("should not retry the App Service plan shortage (every failed plan create counts toward Azure's create limit)", () => {
+      expect(isCapacityOnlyFailure(AZURE_APP_SERVICE_CAPACITY, 'azure')).toBe(
+        false,
+      );
+    });
+
+    it('should not retry when the App Service shortage comes with another error', () => {
+      // 2026-11-17: both plans short of machines, and Postgres refused
+      // (SkuNotAvailable needs region access, a retry doesn't help)
+      const output = `${AZURE_APP_SERVICE_CAPACITY}
+│ Error: creating Flexible Server: polling failed:
+│ Status: "SkuNotAvailable"
+│ Message: "Specified SKU is not supported in this region. Please choose a different SKU."
+╵`;
+      expect(isCapacityOnlyFailure(output, 'azure')).toBe(false);
     });
 
     it('should detect AWS RDS and ElastiCache capacity errors', () => {

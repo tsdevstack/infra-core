@@ -12,8 +12,11 @@ function makeConfig(
     subscriptionId: 'sub-123',
     location: 'eastus2',
     storageAccountName: 'testprojectdevtfstate',
+    naming: 'legacy',
     keyVaultName: 'myproject-dev-kv',
     serviceKeyVaults: {},
+    dbJobsKeyVault: 'test-dev-dbjobs',
+    databaseServiceKeyVaults: {},
     database: {
       tier: 'B_Standard_B1ms',
       storageSizeGb: 32,
@@ -90,10 +93,10 @@ describe('generateAppServiceTf', () => {
       );
     });
 
-    it('should set scm_use_main_ip_restriction to true', () => {
+    it("should give Kudu its own rules (the main site's are Front Door only)", () => {
       const result = generateAppServiceTf(makeConfig());
       expect(result).toContain(
-        'scm_use_main_ip_restriction             = true',
+        'scm_use_main_ip_restriction             = false',
       );
     });
 
@@ -325,6 +328,69 @@ describe('generateAppServiceTf', () => {
     });
   });
 
+  describe('Kudu', () => {
+    const withFrontend = makeConfig({
+      frontends: {
+        frontend: {
+          domain: '',
+          cpu: 1,
+          memory: '1Gi',
+          minInstances: 0,
+          maxInstances: 5,
+        },
+      },
+    });
+
+    function webApp(result: string, tfId: string): string {
+      const start = result.indexOf(
+        `resource "azurerm_linux_web_app" "${tfId}"`,
+      );
+      return result.slice(start, result.indexOf('\n}', start));
+    }
+
+    it('should turn off username/password sign-in on every web app', () => {
+      const result = generateAppServiceTf(withFrontend);
+      for (const tfId of ['kong', 'nextjs_frontend']) {
+        const block = webApp(result, tfId);
+        expect(block).toContain(
+          'ftp_publish_basic_authentication_enabled       = false',
+        );
+        expect(block).toContain(
+          'webdeploy_publish_basic_authentication_enabled = false',
+        );
+      }
+    });
+
+    it("should write every web app's container output to the file system for 3 days, up to 100 MB", () => {
+      const result = generateAppServiceTf(withFrontend);
+      for (const tfId of ['kong', 'nextjs_frontend']) {
+        const block = webApp(result, tfId);
+        expect(block).toContain(`  logs {
+    http_logs {
+      file_system {
+        retention_in_days = 3
+        retention_in_mb   = 100
+      }
+    }
+  }`);
+      }
+    });
+
+    it('should leave Kudu reachable, the Azure sign-in being the gate', () => {
+      const result = generateAppServiceTf(withFrontend);
+      for (const tfId of ['kong', 'nextjs_frontend']) {
+        const block = webApp(result, tfId);
+        expect(block).toContain(
+          'scm_ip_restriction_default_action       = "Allow"',
+        );
+        expect(block).toContain(
+          'scm_use_main_ip_restriction             = false',
+        );
+        expect(block).not.toContain('scm_ip_restriction {');
+      }
+    });
+  });
+
   describe('lifecycle ignore_changes', () => {
     it('should ignore app_settings and the whole container setup on Kong (the deploy runs it with its collector sidecar)', () => {
       const result = generateAppServiceTf(makeConfig());
@@ -552,6 +618,40 @@ describe('generateAppServiceTf', () => {
         }),
       );
       expect(result).not.toContain('health_check_path');
+    });
+  });
+
+  describe('naming scheme', () => {
+    const frontends = {
+      frontend: {
+        domain: '',
+        cpu: 1,
+        memory: '1Gi',
+        minInstances: 0,
+        maxInstances: 5,
+      },
+    };
+
+    it('should keep the Terraform expressions in a legacy environment', () => {
+      const result = generateAppServiceTf(makeConfig({ frontends }));
+      expect(result).toContain(
+        'name                      = "${var.project_name}-${var.environment}-kong"',
+      );
+      expect(result).toContain(
+        'name                      = "${var.project_name}-${var.environment}-frontend"',
+      );
+    });
+
+    it('should name Kong and each Next.js app with the subscription suffix in the unique scheme', () => {
+      const result = generateAppServiceTf(
+        makeConfig({ frontends, naming: 'unique' }),
+      );
+      expect(result).toContain(
+        'name                      = "testproject-dev-kong-f95efe"',
+      );
+      expect(result).toContain(
+        'name                      = "testproject-dev-frontend-f95efe"',
+      );
     });
   });
 });

@@ -96,12 +96,82 @@ describe('deployCloudRunService', () => {
     });
   });
 
+  describe('New revision on every deploy', () => {
+    const plainEnv = (): Array<{ name: string; value?: string }> =>
+      deployedContainer().env as Array<{ name: string; value?: string }>;
+
+    it('should set DEPLOYED_AT to the deploy time', async () => {
+      const before = Date.now();
+      await deployCloudRunService(runtime, options);
+      const after = Date.now();
+
+      const deployedAt = plainEnv().find(
+        (entry) => entry.name === 'DEPLOYED_AT',
+      )?.value;
+      expect(Date.parse(deployedAt ?? '')).toBeGreaterThanOrEqual(before);
+      expect(Date.parse(deployedAt ?? '')).toBeLessThanOrEqual(after);
+    });
+
+    it('should keep the env vars and secrets it is given', async () => {
+      await deployCloudRunService(runtime, {
+        ...options,
+        secrets: [
+          {
+            envVar: 'DATABASE_URL',
+            secretName: 'shop-offers-service-DATABASE_URL',
+            version: 'latest',
+          },
+        ],
+      });
+
+      expect(plainEnv()).toEqual([
+        { name: 'NODE_ENV', value: 'production' },
+        { name: 'DEPLOYED_AT', value: expect.any(String) },
+        {
+          name: 'DATABASE_URL',
+          valueSource: {
+            secretKeyRef: {
+              secret: 'shop-offers-service-DATABASE_URL',
+              version: 'latest',
+            },
+          },
+        },
+      ]);
+    });
+  });
+
   describe('Result', () => {
     it('should return the service URL', async () => {
       await expect(deployCloudRunService(runtime, options)).resolves.toEqual({
         success: true,
         serviceUrl: 'https://offers-service.run.app',
       });
+    });
+  });
+
+  describe('Labels', () => {
+    const deployedService = (): Record<string, unknown> => {
+      const [request] = mockUpdateService.mock.calls[0] as [
+        { service: Record<string, unknown> },
+      ];
+      return request.service;
+    };
+
+    it('should set the labels it is given', async () => {
+      await deployCloudRunService(runtime, {
+        ...options,
+        labels: { 'tsdevstack-project': 'shop' },
+      });
+
+      expect(deployedService().labels).toEqual({
+        'tsdevstack-project': 'shop',
+      });
+    });
+
+    it('should send no labels field without labels', async () => {
+      await deployCloudRunService(runtime, options);
+
+      expect(deployedService()).not.toHaveProperty('labels');
     });
   });
 });

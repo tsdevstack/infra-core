@@ -68,6 +68,54 @@ describe('generateLoggingTf', () => {
     });
   });
 
+  describe('public access and HTTPS on both log buckets', () => {
+    function block(header: string): string {
+      const start = result.indexOf(header);
+      expect(start).toBeGreaterThan(-1);
+      return result.slice(start, result.indexOf('\n}\n', start));
+    }
+
+    it.each(['alb_logs', 'cloudfront_logs'])(
+      'should block all public access on %s',
+      (bucket) => {
+        const access = block(
+          `resource "aws_s3_bucket_public_access_block" "${bucket}"`,
+        );
+        expect(access).toContain(`bucket = aws_s3_bucket.${bucket}.id`);
+        expect(access).toContain('block_public_acls       = true');
+        expect(access).toContain('block_public_policy     = true');
+        expect(access).toContain('ignore_public_acls      = true');
+        expect(access).toContain('restrict_public_buckets = true');
+      },
+    );
+
+    it.each(['alb_logs', 'cloudfront_logs'])(
+      'should refuse requests without HTTPS on %s, after the access block',
+      (bucket) => {
+        const policy = block(`resource "aws_s3_bucket_policy" "${bucket}"`);
+        expect(policy).toContain(
+          `depends_on = [aws_s3_bucket_public_access_block.${bucket}]`,
+        );
+        expect(policy).toContain('Sid       = "DenyInsecureTransport"');
+        expect(policy).toContain(
+          `Resource  = [aws_s3_bucket.${bucket}.arn, "\${aws_s3_bucket.${bucket}.arn}/*"]`,
+        );
+      },
+    );
+
+    it('should keep the ELB log delivery statement', () => {
+      expect(block('resource "aws_s3_bucket_policy" "alb_logs"')).toContain(
+        'Sid    = "AllowELBLogDelivery"',
+      );
+    });
+
+    it('should block public ACLs only after the log delivery ACL is set', () => {
+      expect(
+        block('resource "aws_s3_bucket_public_access_block" "cloudfront_logs"'),
+      ).toContain('depends_on = [aws_s3_bucket_acl.cloudfront_logs]');
+    });
+  });
+
   describe('WAF logging (CloudFront scope)', () => {
     it('should create CloudWatch log group with required prefix', () => {
       expect(result).toContain('resource "aws_cloudwatch_log_group" "waf"');

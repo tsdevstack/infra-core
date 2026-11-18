@@ -10,6 +10,7 @@ describe('generateDatabaseTf', () => {
     gcpProjectId: 'gcp-project-123',
     region: 'us-central1',
     stateBucket: 'my-app-tf-state',
+    naming: 'legacy',
     baseDomain: 'example.com',
     database: {
       tier: 'db-f1-micro',
@@ -70,6 +71,24 @@ describe('generateDatabaseTf', () => {
     });
   });
 
+  describe('admin login for db-init', () => {
+    it("should give Cloud SQL's postgres user a generated password", () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).toContain('resource "random_password" "db_admin"');
+      expect(result).toContain(
+        'root_password = random_password.db_admin.result',
+      );
+    });
+
+    it('should keep that password in Secret Manager, outside the secrets naming', () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).toContain(
+        'secret_id = "${var.project_name}-db-admin-password"',
+      );
+      expect(result).toContain('secret_data = random_password.db_admin.result');
+    });
+  });
+
   describe('IP configuration', () => {
     it('should disable public IP', () => {
       const result = generateDatabaseTf(baseConfig);
@@ -95,6 +114,54 @@ describe('generateDatabaseTf', () => {
     it('should configure backup start time', () => {
       const result = generateDatabaseTf(baseConfig);
       expect(result).toContain('start_time                     = "03:00"');
+    });
+  });
+
+  describe('saved databases bucket', () => {
+    it('should make one private bucket for the environment, unique worldwide', () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).toContain('resource "google_storage_bucket" "db_exports"');
+      expect(result).toContain(
+        'name          = "${var.project_name}-db-exports-${var.gcp_project_id}"',
+      );
+      expect(result).toContain('public_access_prevention    = "enforced"');
+      expect(result).toContain('uniform_bucket_level_access = true');
+    });
+
+    it('should delete files after 7 days, with no soft delete, and go with the environment', () => {
+      const result = generateDatabaseTf(baseConfig);
+      const bucket = result.slice(
+        result.indexOf('resource "google_storage_bucket" "db_exports"'),
+      );
+      expect(bucket).toContain('age = 7');
+      expect(bucket).toContain('type = "Delete"');
+      expect(bucket).toContain('retention_duration_seconds = 0');
+      expect(bucket).toContain('force_destroy = true');
+    });
+
+    it('should let only db-init write and read files, not delete them', () => {
+      const result = generateDatabaseTf(baseConfig);
+      const grants = result.match(
+        /resource "google_storage_bucket_iam_member" "db_exports_\w+" \{[\s\S]*?\n\}/g,
+      );
+      expect(grants).toHaveLength(2);
+      expect(grants?.join('\n')).toContain('roles/storage.objectCreator');
+      expect(grants?.join('\n')).toContain('roles/storage.objectViewer');
+      for (const grant of grants ?? []) {
+        expect(grant).toContain(
+          'member = "serviceAccount:${google_service_account.db_jobs.email}"',
+        );
+      }
+      expect(result).not.toContain('roles/storage.objectAdmin');
+      expect(result).not.toContain('roles/storage.objectUser');
+    });
+
+    it('should be there without database services (db-init still runs)', () => {
+      const result = generateDatabaseTf({
+        ...baseConfig,
+        servicesWithDatabase: [],
+      });
+      expect(result).toContain('resource "google_storage_bucket" "db_exports"');
     });
   });
 
@@ -129,8 +196,8 @@ describe('generateDatabaseTf', () => {
       const result = generateDatabaseTf(config);
       expect(result).toContain('resource "google_sql_database" "auth_service"');
       expect(result).toContain('resource "google_sql_database" "api_service"');
-      expect(result).toContain('name     = "auth-service"');
-      expect(result).toContain('name     = "api-service"');
+      expect(result).toContain('name            = "auth-service"');
+      expect(result).toContain('name            = "api-service"');
     });
 
     it('should not create database for services without hasDatabase', () => {
@@ -168,7 +235,7 @@ describe('generateDatabaseTf', () => {
       expect(result).toContain(
         'resource "google_sql_database" "my_cool_service"',
       );
-      expect(result).toContain('name     = "my-cool-service"');
+      expect(result).toContain('name            = "my-cool-service"');
     });
   });
 
@@ -185,6 +252,13 @@ describe('generateDatabaseTf', () => {
       const result = generateDatabaseTf(baseConfig);
       expect(result).toMatch(
         /resource "google_sql_user" "auth_service_user" \{[^}]*deletion_policy = "ABANDON"/,
+      );
+    });
+
+    it("should abandon databases on destroy (Cloud SQL's API refuses a database db-init gave to the owner)", () => {
+      const result = generateDatabaseTf(baseConfig);
+      expect(result).toMatch(
+        /resource "google_sql_database" "auth_service" \{[^}]*deletion_policy = "ABANDON"/,
       );
     });
 

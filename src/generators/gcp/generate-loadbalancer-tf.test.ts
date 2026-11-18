@@ -1,10 +1,13 @@
 import { describe, it, expect } from '@rstest/core';
 import { generateLoadBalancerTf } from './generate-loadbalancer-tf';
 
+const LEGACY = { projectName: 'myapp', naming: 'legacy' } as const;
+
 describe('generateLoadBalancerTf', () => {
   describe('API-only deployment (no frontends)', () => {
     it('should generate terraform with only Kong backend', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -36,6 +39,7 @@ describe('generateLoadBalancerTf', () => {
 
   describe('Client address and IPv6', () => {
     const result = generateLoadBalancerTf({
+      ...LEGACY,
       apiDomain: 'api.example.com',
       frontendServices: [{ name: 'frontend', domain: 'example.com' }],
     });
@@ -94,6 +98,7 @@ describe('generateLoadBalancerTf', () => {
   describe('with frontend services', () => {
     it('should generate NEGs and backends for each frontend', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'frontend', domain: 'example.com' },
@@ -128,6 +133,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should include all domains in SSL certificate', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'frontend', domain: 'example.com' },
@@ -145,6 +151,7 @@ describe('generateLoadBalancerTf', () => {
   describe('Certificate Manager with DNS Authorization', () => {
     it('should create DNS authorization for API domain', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -157,6 +164,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should create DNS authorization for each frontend', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'frontend', domain: 'example.com' },
@@ -174,6 +182,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should create per-domain certificates with DNS authorizations', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -187,6 +196,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should create certificate map and per-domain entries', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -203,6 +213,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should use certificate_map in HTTPS proxy', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -216,6 +227,7 @@ describe('generateLoadBalancerTf', () => {
   describe('DNS authorization outputs', () => {
     it('should output DNS auth record for API domain', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -225,6 +237,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should output DNS auth records for frontends', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [{ name: 'frontend', domain: 'example.com' }],
       });
@@ -236,6 +249,7 @@ describe('generateLoadBalancerTf', () => {
   describe('HTTP to HTTPS redirect', () => {
     it('should include HTTP redirect configuration', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -253,6 +267,7 @@ describe('generateLoadBalancerTf', () => {
   describe('outputs', () => {
     it('should output load balancer IP', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -262,6 +277,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should output API URL', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -272,6 +288,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should output frontend URLs', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'frontend', domain: 'example.com' },
@@ -289,6 +306,7 @@ describe('generateLoadBalancerTf', () => {
   describe('SPA backends (Cloud Storage + CDN)', () => {
     it('should reference existing SPA bucket via data source', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'react-app', domain: 'app.example.com', type: 'spa' },
@@ -302,6 +320,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should generate backend bucket with CDN for SPA services', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'react-app', domain: 'app.example.com', type: 'spa' },
@@ -315,8 +334,36 @@ describe('generateLoadBalancerTf', () => {
       expect(result).toContain('cache_mode        = "CACHE_ALL_STATIC"');
     });
 
+    it('should let only the load balancer read the private SPA bucket, after its backend bucket exists', () => {
+      const result = generateLoadBalancerTf({
+        ...LEGACY,
+        apiDomain: 'api.example.com',
+        frontendServices: [
+          { name: 'react-app', domain: 'app.example.com', type: 'spa' },
+        ],
+      });
+
+      const start = result.indexOf(
+        'resource "google_storage_bucket_iam_member" "react_app_spa_lb_reader"',
+      );
+      expect(start).toBeGreaterThan(-1);
+      const reader = result.slice(start, result.indexOf('\n}', start));
+      expect(reader).toContain(
+        'bucket = google_storage_bucket.react_app_spa.name',
+      );
+      expect(reader).toContain('role   = "roles/storage.objectViewer"');
+      expect(reader).toContain(
+        'member = "serviceAccount:service-${data.google_project.current.number}@https-lb.iam.gserviceaccount.com"',
+      );
+      expect(reader).toContain(
+        'depends_on = [google_compute_backend_bucket.react_app_spa_backend]',
+      );
+      expect(result).not.toContain('allUsers');
+    });
+
     it('should NOT generate NEG or backend_service for SPA services', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'react-app', domain: 'app.example.com', type: 'spa' },
@@ -335,6 +382,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should handle mixed Cloud Run and SPA services', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [
           { name: 'frontend', domain: 'example.com', type: 'cloudrun' },
@@ -371,6 +419,7 @@ describe('generateLoadBalancerTf', () => {
   describe('Cloud Armor security policy', () => {
     it('should create default security policy', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -385,6 +434,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should include SQL injection protection', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -397,6 +447,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should include XSS protection', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -409,6 +460,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should include SSRF protection for cloud metadata endpoint', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -422,6 +474,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should include Node.js specific attack protection', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -436,6 +489,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should include rate limiting with defaults', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -447,6 +501,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should use custom rate limit when provided', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
         rateLimit: { count: 500, intervalSec: 30 },
@@ -458,6 +513,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should attach security policy to Kong backend', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -472,6 +528,7 @@ describe('generateLoadBalancerTf', () => {
 
     it('should attach security policy to Cloud Run frontend backends', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [{ name: 'frontend', domain: 'example.com' }],
       });
@@ -490,6 +547,7 @@ describe('generateLoadBalancerTf', () => {
   describe('load balancer type', () => {
     it('should pin the Classic load balancer on every backend service and forwarding rule', () => {
       const result = generateLoadBalancerTf({
+        ...LEGACY,
         apiDomain: 'api.example.com',
         frontendServices: [],
       });
@@ -501,6 +559,30 @@ describe('generateLoadBalancerTf', () => {
       expect(result.match(/load_balancing_scheme = "EXTERNAL"/g)).toHaveLength(
         5,
       );
+    });
+  });
+
+  describe('naming scheme', () => {
+    const frontendServices = [{ name: 'frontend', domain: 'example.com' }];
+
+    it("should point the NEG at the frontend's bare name in a legacy environment", () => {
+      const result = generateLoadBalancerTf({
+        ...LEGACY,
+        apiDomain: 'api.example.com',
+        frontendServices,
+      });
+      expect(result).toContain('service = "frontend"');
+    });
+
+    it('should point the NEG at {project}-{frontend} in the unique scheme', () => {
+      const result = generateLoadBalancerTf({
+        projectName: 'myapp',
+        naming: 'unique',
+        apiDomain: 'api.example.com',
+        frontendServices,
+      });
+      expect(result).toContain('service = "myapp-frontend"');
+      expect(result).toContain('service = "${var.project_name}-kong"');
     });
   });
 });

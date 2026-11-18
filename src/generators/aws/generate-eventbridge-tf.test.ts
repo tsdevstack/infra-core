@@ -54,9 +54,13 @@ describe('generateEventbridgeTf', () => {
       expect(result).toContain('runtime       = "nodejs24.x"');
     });
 
-    it('should have 5 minute timeout', () => {
+    it("should run 10 s longer than the longest job's httpTimeout, at least 300 s", () => {
       const result = generateEventbridgeTf();
-      expect(result).toContain('timeout       = 300');
+      expect(result).toContain('timeout = max(300, [');
+      expect(result).toContain(
+        'for job in values(var.scheduled_jobs) : job.timeoutSeconds',
+      );
+      expect(result).toContain(']...) + 10');
     });
 
     it('should be in VPC for CloudMap DNS', () => {
@@ -140,7 +144,9 @@ describe('generateEventbridgeTf', () => {
 
     it('should use schedule expression from config', () => {
       const result = generateEventbridgeTf();
-      expect(result).toContain('schedule_expression = each.value.schedule');
+      expect(result).toContain(
+        'schedule_expression          = each.value.schedule',
+      );
     });
 
     it('should disable flexible time window', () => {
@@ -155,11 +161,20 @@ describe('generateEventbridgeTf', () => {
       );
     });
 
-    it('should pass serviceName and path as input', () => {
+    it("should pass the job's service, path, method and wait as input", () => {
       const result = generateEventbridgeTf();
-      expect(result).toContain('serviceName = each.value.serviceName');
-      expect(result).toContain('path        = each.value.path');
-      expect(result).toContain('jobName     = each.key');
+      expect(result).toContain('serviceName    = each.value.serviceName');
+      expect(result).toContain('path           = each.value.path');
+      expect(result).toContain('jobName        = each.key');
+      expect(result).toContain('method         = each.value.method');
+      expect(result).toContain('timeoutSeconds = each.value.timeoutSeconds');
+    });
+
+    it("should run each schedule in the job's time zone", () => {
+      const result = generateEventbridgeTf();
+      expect(result).toContain(
+        'schedule_expression_timezone = each.value.timezone',
+      );
     });
 
     it('should configure retry policy', () => {

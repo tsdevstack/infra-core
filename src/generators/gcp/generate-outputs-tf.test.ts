@@ -4,13 +4,13 @@ import { generateOutputsTf } from './generate-outputs-tf';
 describe('generateOutputsTf', () => {
   describe('VPC outputs', () => {
     it('should output vpc_name', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "vpc_name"');
       expect(result).toContain('value       = google_compute_network.vpc.name');
     });
 
     it('should output vpc_id', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "vpc_id"');
       expect(result).toContain('value       = google_compute_network.vpc.id');
     });
@@ -18,7 +18,7 @@ describe('generateOutputsTf', () => {
 
   describe('subnet outputs', () => {
     it('should output subnet_name', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "subnet_name"');
       expect(result).toContain(
         'value       = google_compute_subnetwork.subnet.name',
@@ -26,7 +26,7 @@ describe('generateOutputsTf', () => {
     });
 
     it('should output subnet_id', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "subnet_id"');
       expect(result).toContain(
         'value       = google_compute_subnetwork.subnet.id',
@@ -36,7 +36,7 @@ describe('generateOutputsTf', () => {
 
   describe('private service connection outputs', () => {
     it('should output peering name', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "private_service_connection_peering"');
       expect(result).toContain(
         'google_service_networking_connection.private_service_connection.peering',
@@ -46,13 +46,13 @@ describe('generateOutputsTf', () => {
 
   describe('database outputs', () => {
     it('should output database_instance_name', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "database_instance_name"');
       expect(result).toContain('google_sql_database_instance.postgres.name');
     });
 
     it('should output database_connection_name', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "database_connection_name"');
       expect(result).toContain(
         'google_sql_database_instance.postgres.connection_name',
@@ -60,7 +60,7 @@ describe('generateOutputsTf', () => {
     });
 
     it('should output database_private_ip', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "database_private_ip"');
       expect(result).toContain(
         'google_sql_database_instance.postgres.private_ip_address',
@@ -70,19 +70,19 @@ describe('generateOutputsTf', () => {
 
   describe('redis outputs', () => {
     it('should output redis_host', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "redis_host"');
       expect(result).toContain('google_redis_instance.redis.host');
     });
 
     it('should output redis_port', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "redis_port"');
       expect(result).toContain('google_redis_instance.redis.port');
     });
 
     it('should output redis_current_location_id', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "redis_current_location_id"');
       expect(result).toContain(
         'google_redis_instance.redis.current_location_id',
@@ -90,7 +90,7 @@ describe('generateOutputsTf', () => {
     });
 
     it('should output redis_auth_string as sensitive', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('output "redis_auth_string"');
       expect(result).toContain('google_redis_instance.redis.auth_string');
       expect(result).toContain('sensitive   = true');
@@ -99,7 +99,7 @@ describe('generateOutputsTf', () => {
 
   describe('output descriptions', () => {
     it('should include descriptions for all outputs', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       // Count occurrences of 'description'
       const descriptionCount = (result.match(/description\s*=/g) || []).length;
       // Should have at least 10 outputs (VPC, subnet, service accounts, database, redis, artifact registry)
@@ -109,15 +109,59 @@ describe('generateOutputsTf', () => {
 
   describe('header comment', () => {
     it('should include generation comment', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toContain('Generated by: npx tsdevstack infra:generate');
+    });
+  });
+
+  describe('database jobs', () => {
+    it("should output the admin password's secret and the database jobs' account", () => {
+      const result = generateOutputsTf({ naming: 'legacy' });
+      expect(result).toContain('output "db_admin_password_secret"');
+      expect(result).toContain(
+        'value       = google_secret_manager_secret.db_admin_password.secret_id',
+      );
+      expect(result).toContain('output "db_jobs_service_account_email"');
+      expect(result).toContain(
+        'value       = google_service_account.db_jobs.email',
+      );
+    });
+
+    it("should output the saved databases' bucket", () => {
+      const result = generateOutputsTf({ naming: 'legacy' });
+      expect(result).toContain('output "db_exports_bucket"');
+      expect(result).toContain(
+        'value       = google_storage_bucket.db_exports.name',
+      );
+    });
+
+    it("should output each database service's migration account", () => {
+      const result = generateOutputsTf({ naming: 'legacy' });
+      expect(result).toContain('output "migration_service_account_emails"');
+      expect(result).toContain(
+        'value       = { for k, v in google_service_account.migrate : k => v.email }',
+      );
     });
   });
 
   describe('snapshot', () => {
     it('should match snapshot', () => {
-      const result = generateOutputsTf();
+      const result = generateOutputsTf({ naming: 'legacy' });
       expect(result).toMatchSnapshot();
+    });
+  });
+
+  describe('naming scheme', () => {
+    it("should record the environment's scheme in its state", () => {
+      expect(generateOutputsTf({ naming: 'legacy' })).toContain(
+        'output "naming_scheme" {',
+      );
+      expect(generateOutputsTf({ naming: 'legacy' })).toContain(
+        'value       = "legacy"',
+      );
+      expect(generateOutputsTf({ naming: 'unique' })).toContain(
+        'value       = "unique"',
+      );
     });
   });
 });

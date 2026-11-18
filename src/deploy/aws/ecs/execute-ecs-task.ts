@@ -33,7 +33,12 @@ import { readEcsTaskOutcome } from './read-ecs-task-outcome.ts';
 export interface EcsTaskOptions {
   region: string;
   clusterName: string;
+  /** Name in the CLI's messages, e.g. "migrate-auth-service" */
   taskName: string;
+  /** Task definition family, registered on each run */
+  taskFamily: string;
+  /** Log group the task writes to; created here when missing */
+  logGroupName: string;
   imageUri: string;
   command: string[];
   subnetIds: string[];
@@ -73,8 +78,7 @@ export async function executeEcsTask(
   const ecs = new ECSClient(ecsConfig);
   const cloudwatch = new CloudWatchLogsClient(ecsConfig);
 
-  const taskFamily = `${options.taskName}-migration`;
-  const logGroup = `/ecs/${taskFamily}`;
+  const { taskFamily, logGroupName: logGroup } = options;
   const logStreamPrefix = ECS_MIGRATION_CONTAINER_NAME;
 
   // Create log group if it doesn't exist (execution role may not have CreateLogGroup permission)

@@ -6,10 +6,17 @@
  * - Random master password
  * - RDS PostgreSQL 15 instance
  * - Master password secret (Secrets Manager)
+ * - The bucket of saved databases, and db-init's rights on it
  *
  * Note: Individual databases and users are created at deploy time via init job,
  * not in Terraform, matching the GCP pattern.
  */
+
+import {
+  DB_EXPORT_RETENTION_DAYS,
+  DB_SERVER_POSTGRES_VERSION,
+} from '../../constants/database-export.ts';
+import { buildDenyInsecureTransportStatement } from '../../utils/aws/build-deny-insecure-transport-statement.ts';
 
 export function generateDatabaseTf(): string {
   return `# RDS PostgreSQL Database
@@ -49,7 +56,7 @@ resource "random_id" "db_final_snapshot" {
 resource "aws_db_instance" "main" {
   identifier     = "\${var.project_name}-db"
   engine         = "postgres"
-  engine_version = "15"
+  engine_version = "${DB_SERVER_POSTGRES_VERSION.aws}"
   instance_class = var.db_instance_class
 
   db_name  = "postgres"
@@ -102,6 +109,90 @@ resource "aws_secretsmanager_secret" "db_master_password" {
 resource "aws_secretsmanager_secret_version" "db_master_password" {
   secret_id     = aws_secretsmanager_secret.db_master_password.id
   secret_string = random_password.db_master.result
+}
+
+# =============================================================================
+# Saved databases: infra:remove-service saves a service's database here
+# before it drops it, and infra:restore-database saves the current contents
+# before it replaces them ({service}/{time}-{reason}.dump). One bucket for the
+# environment: a bucket per service would go with the service at the next
+# deploy, and its file with it. Files are deleted after ${DB_EXPORT_RETENTION_DAYS} days (no
+# versions are kept); destroy deletes the bucket and its files.
+# =============================================================================
+
+resource "aws_s3_bucket" "db_exports" {
+  bucket        = "\${var.project_name}-db-exports-\${var.aws_account_id}"
+  force_destroy = true
+
+  tags = { Name = "\${var.project_name}-db-exports" }
+}
+
+resource "aws_s3_bucket_public_access_block" "db_exports" {
+  bucket = aws_s3_bucket.db_exports.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "db_exports" {
+  depends_on = [aws_s3_bucket_public_access_block.db_exports]
+  bucket     = aws_s3_bucket.db_exports.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+${buildDenyInsecureTransportStatement('aws_s3_bucket.db_exports.arn', '      ')}
+    ]
+  })
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "db_exports" {
+  bucket = aws_s3_bucket.db_exports.id
+
+  rule {
+    id     = "delete-saved-databases"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = ${DB_EXPORT_RETENTION_DAYS}
+    }
+
+    # A save that stopped halfway leaves parts of an upload behind
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}
+
+# Only db-init (its task role) writes and reads the files: it can't delete
+# them. The deploy account lists them (the check before a removal, the
+# choice of file for a restore).
+resource "aws_iam_role_policy" "db_init_exports" {
+  name = "db-exports-access"
+  role = aws_iam_role.db_init_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "SaveAndReadDatabases"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:AbortMultipartUpload"]
+        Resource = ["\${aws_s3_bucket.db_exports.arn}/*"]
+      },
+      {
+        # A missing file then reads as missing, not as access denied
+        Sid      = "ListSavedDatabases"
+        Effect   = "Allow"
+        Action   = ["s3:ListBucket"]
+        Resource = [aws_s3_bucket.db_exports.arn]
+      }
+    ]
+  })
 }
 `;
 }

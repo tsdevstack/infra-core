@@ -167,6 +167,66 @@ describe('generateDatabaseTf', () => {
     });
   });
 
+  describe('saved databases', () => {
+    const block = (result: string, header: string): string => {
+      const start = result.indexOf(header);
+      return result.slice(start, result.indexOf('\n}\n', start) + 2);
+    };
+
+    it('should make one bucket for the environment, deleted with it', () => {
+      const bucket = block(
+        generateDatabaseTf(),
+        'resource "aws_s3_bucket" "db_exports"',
+      );
+      expect(bucket).toContain(
+        'bucket        = "${var.project_name}-db-exports-${var.aws_account_id}"',
+      );
+      expect(bucket).toContain('force_destroy = true');
+    });
+
+    it('should block public access and refuse requests without HTTPS', () => {
+      const result = generateDatabaseTf();
+      const publicAccess = block(
+        result,
+        'resource "aws_s3_bucket_public_access_block" "db_exports"',
+      );
+      for (const setting of [
+        'block_public_acls',
+        'block_public_policy',
+        'ignore_public_acls',
+        'restrict_public_buckets',
+      ]) {
+        expect(publicAccess).toMatch(new RegExp(`${setting}\\s+= true`));
+      }
+      const policy = block(
+        result,
+        'resource "aws_s3_bucket_policy" "db_exports"',
+      );
+      expect(policy).toContain('"aws:SecureTransport" = "false"');
+    });
+
+    it('should delete files after 7 days and drop unfinished uploads', () => {
+      const lifecycle = block(
+        generateDatabaseTf(),
+        'resource "aws_s3_bucket_lifecycle_configuration" "db_exports"',
+      );
+      expect(lifecycle).toMatch(/expiration \{\s+days = 7\s+\}/);
+      expect(lifecycle).toContain('days_after_initiation = 1');
+    });
+
+    it('should let db-init write and read files but not delete them', () => {
+      const grant = block(
+        generateDatabaseTf(),
+        'resource "aws_iam_role_policy" "db_init_exports"',
+      );
+      expect(grant).toContain('role = aws_iam_role.db_init_task.id');
+      expect(grant).toContain('"s3:PutObject"');
+      expect(grant).toContain('"s3:GetObject"');
+      expect(grant).not.toContain('s3:DeleteObject');
+      expect(grant).not.toContain('s3:*');
+    });
+  });
+
   describe('header comment', () => {
     it('should include generation comment', () => {
       const result = generateDatabaseTf();

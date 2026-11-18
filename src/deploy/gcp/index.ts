@@ -15,6 +15,8 @@ export type {
 
 // Cloud Run Services (Session 3)
 export { deployCloudRunService } from './cloud-run-services.ts';
+export { waitForCloudRunService } from './wait-for-cloud-run-service.ts';
+export type { WaitForCloudRunServiceOptions } from './wait-for-cloud-run-service.ts';
 export type {
   CloudRunServiceOptions,
   CloudRunServiceResult,

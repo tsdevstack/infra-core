@@ -13,9 +13,14 @@ interface GcpDashboardOptions {
   hasLoadBalancer: boolean;
 }
 
+/**
+ * A tile at column 0 or row 0 leaves xPos or yPos out: Cloud Monitoring
+ * stores no 0 position, and a 0 in the config makes every plan show an
+ * update of the dashboard
+ */
 interface Tile {
-  xPos: number;
-  yPos: number;
+  xPos?: number;
+  yPos?: number;
   width: number;
   height: number;
   widget: Record<string, unknown>;
@@ -183,8 +188,6 @@ export function generateDashboardTf(options: GcpDashboardOptions): string {
 
   const tiles: Tile[] = [
     {
-      xPos: 0,
-      yPos: 0,
       width: HALF * 2,
       height: 4,
       widget: {
@@ -199,7 +202,7 @@ export function generateDashboardTf(options: GcpDashboardOptions): string {
   ];
   widgets.forEach((widget, index) => {
     tiles.push({
-      xPos: (index % 2) * HALF,
+      ...(index % 2 === 1 && { xPos: HALF }),
       yPos: 4 + Math.floor(index / 2) * CHART_HEIGHT,
       width: HALF,
       height: CHART_HEIGHT,
@@ -208,7 +211,6 @@ export function generateDashboardTf(options: GcpDashboardOptions): string {
   });
   const lastRow = 4 + Math.ceil(widgets.length / 2) * CHART_HEIGHT;
   tiles.push({
-    xPos: 0,
     yPos: lastRow,
     width: HALF * 2,
     height: CHART_HEIGHT,

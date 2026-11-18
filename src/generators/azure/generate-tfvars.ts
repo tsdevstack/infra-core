@@ -4,6 +4,10 @@
 
 import { toHclStringMap } from '../../utils/terraform/to-hcl-string-map.ts';
 import type { AzureInfraConfig } from '../../types/config.ts';
+import {
+  DEFAULT_SCHEDULED_JOB_METHOD,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
+} from '../../constants/index.ts';
 
 export function generateTfvars(config: AzureInfraConfig): string {
   const {
@@ -17,6 +21,8 @@ export function generateTfvars(config: AzureInfraConfig): string {
     scheduledJobs,
     keyVaultName,
     serviceKeyVaults,
+    dbJobsKeyVault,
+    databaseServiceKeyVaults,
   } = config;
 
   const scheduledJobsHcl = formatScheduledJobsMap(scheduledJobs);
@@ -36,6 +42,10 @@ nextjs_app_service_sku = "${nextjsAppServiceSku}"
 key_vault_name     = "${keyVaultName}"
 service_key_vaults = ${toHclStringMap(serviceKeyVaults)}
 
+# The database jobs' Key Vault, and the own vault of each database service
+db_jobs_key_vault           = "${dbJobsKeyVault}"
+database_service_key_vaults = ${toHclStringMap(databaseServiceKeyVaults)}
+
 # Scheduled Jobs
 scheduled_jobs = ${scheduledJobsHcl}
 `;
@@ -53,6 +63,8 @@ function formatScheduledJobsMap(
     schedule     = "${cfg.schedule}"
     service_name = "${cfg.targetService}"
     path         = "${cfg.endpoint}"
+    method       = "${cfg.method ?? DEFAULT_SCHEDULED_JOB_METHOD}"
+    timeout      = ${cfg.httpTimeout ?? SCHEDULED_JOB_HTTP_TIMEOUT.azure.default}
   }`,
   );
 

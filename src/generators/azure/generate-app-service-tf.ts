@@ -4,6 +4,8 @@
  * Kong gets a dedicated App Service Plan.
  * Next.js apps share one App Service Plan.
  * Both have Access Restrictions (service tag + FDID header) for Front Door.
+ * Their Kudu sites (deploy and log stream) are reachable with an Azure
+ * sign-in only, and get the containers' output for their log stream.
  *
  * Each plan runs `instances` workers (minInstances, at least 1). With
  * `autoscaleMax` set (Standard and Premium SKUs), app-service-autoscale.tf
@@ -22,7 +24,9 @@ import type {
   AppServicePlanScaling,
 } from '../../types/config.ts';
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
+import { buildAzureTerraformName } from '../../utils/azure/build-azure-terraform-name.ts';
 import {
+  AZURE_APP_SERVICE_CONTAINER_LOGS,
   AZURE_APP_SERVICE_HEALTH_CHECK,
   AZURE_KONG_CLIENT_IP_SETTINGS,
   AZURE_KONG_PRIVATE_ENDPOINT,
@@ -40,7 +44,17 @@ export function generateAppServiceTf(config: AzureInfraConfig): string {
   const nextjsWebApps = nextjsEntries
     .map(([name]) => {
       const tfId = toTerraformId(name);
-      return generateNextjsWebApp(tfId, name, config.nextjsScaling);
+      return generateNextjsWebApp(
+        tfId,
+        name,
+        config.nextjsScaling,
+        buildAzureTerraformName(
+          config,
+          'appService',
+          `"\${var.project_name}-\${var.environment}-${name}"`,
+          name,
+        ),
+      );
     })
     .join('\n');
 
@@ -101,7 +115,12 @@ ${nextjsPlan}
 # =============================================================================
 
 resource "azurerm_linux_web_app" "kong" {
-  name                      = "\${var.project_name}-\${var.environment}-kong"
+  name                      = ${buildAzureTerraformName(
+    config,
+    'appService',
+    '"${var.project_name}-${var.environment}-kong"',
+    'kong',
+  )}
   location                  = data.azurerm_resource_group.main.location
   resource_group_name       = data.azurerm_resource_group.main.name
   service_plan_id           = azurerm_service_plan.kong.id
@@ -109,6 +128,7 @@ resource "azurerm_linux_web_app" "kong" {
   https_only                = true
   client_affinity_enabled   = false
   tags                      = local.tags
+${generateKuduSettings()}
 
   site_config {
     always_on                               = true
@@ -117,7 +137,8 @@ resource "azurerm_linux_web_app" "kong" {
     ftps_state                              = "Disabled"
     http2_enabled                           = true
     ip_restriction_default_action           = "Deny"
-    scm_use_main_ip_restriction             = true${generateHealthCheck(config.kongScaling, AZURE_APP_SERVICE_HEALTH_CHECK.kongPath)}
+    scm_ip_restriction_default_action       = "Allow"
+    scm_use_main_ip_restriction             = false${generateHealthCheck(config.kongScaling, AZURE_APP_SERVICE_HEALTH_CHECK.kongPath)}
 
     ip_restriction {
       service_tag = "AzureFrontDoor.Backend"
@@ -184,6 +205,34 @@ function generatePlanLifecycle(scaling: AppServicePlanScaling): string {
 }
 
 /**
+ * Kudu (the app's deploy endpoint and log stream) settings for a web app:
+ * no username/password sign-in, only Azure sign-in with publish rights on
+ * the app; the containers' output written to /home/LogFiles, which is what
+ * Kudu's log stream sends (infra:logs --follow reads it with the
+ * environment's credentials).
+ *
+ * Kudu has its own access rules (site_config): reachable from anywhere, the
+ * sign-in being the gate. "Use the main site's rules" only looked locked:
+ * Azure applied the rules but kept Kudu's own default action (Allow), so
+ * Kudu answered from anywhere (az6, 2026-11-18). The deploy turns SSH off
+ * (azurerm can't).
+ */
+function generateKuduSettings(): string {
+  return `
+  ftp_publish_basic_authentication_enabled       = false
+  webdeploy_publish_basic_authentication_enabled = false
+
+  logs {
+    http_logs {
+      file_system {
+        retention_in_days = ${AZURE_APP_SERVICE_CONTAINER_LOGS.retentionDays}
+        retention_in_mb   = ${AZURE_APP_SERVICE_CONTAINER_LOGS.retentionMb}
+      }
+    }
+  }`;
+}
+
+/**
  * Health check settings for a plan that can run more than one instance
  */
 function generateHealthCheck(
@@ -203,6 +252,7 @@ function generateNextjsWebApp(
   tfId: string,
   serviceName: string,
   scaling: AppServicePlanScaling,
+  appName: string,
 ): string {
   return `
 # =============================================================================
@@ -210,7 +260,7 @@ function generateNextjsWebApp(
 # =============================================================================
 
 resource "azurerm_linux_web_app" "nextjs_${tfId}" {
-  name                      = "\${var.project_name}-\${var.environment}-${serviceName}"
+  name                      = ${appName}
   location                  = data.azurerm_resource_group.main.location
   resource_group_name       = data.azurerm_resource_group.main.name
   service_plan_id           = azurerm_service_plan.nextjs.id
@@ -218,6 +268,7 @@ resource "azurerm_linux_web_app" "nextjs_${tfId}" {
   https_only                = true
   client_affinity_enabled   = false
   tags                      = local.tags
+${generateKuduSettings()}
 
   site_config {
     always_on                               = true
@@ -226,7 +277,8 @@ resource "azurerm_linux_web_app" "nextjs_${tfId}" {
     ftps_state                              = "Disabled"
     http2_enabled                           = true
     ip_restriction_default_action           = "Deny"
-    scm_use_main_ip_restriction             = true${generateHealthCheck(scaling, AZURE_APP_SERVICE_HEALTH_CHECK.nextjsPath)}
+    scm_ip_restriction_default_action       = "Allow"
+    scm_use_main_ip_restriction             = false${generateHealthCheck(scaling, AZURE_APP_SERVICE_HEALTH_CHECK.nextjsPath)}
 
     ip_restriction {
       service_tag = "AzureFrontDoor.Backend"

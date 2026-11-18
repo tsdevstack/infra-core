@@ -27,6 +27,7 @@ export type {
   AWSInfraConfig,
   GCPInfraConfig,
   InfraConfig,
+  NamingScheme,
 } from './config.ts';
 
 // Runtime types

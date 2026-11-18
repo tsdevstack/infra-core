@@ -12,6 +12,7 @@ import type { InfraCoreRuntime } from '../../../types/runtime.ts';
 import type { AzureCredentials } from '../../../types/credentials.ts';
 import { InfraCoreError } from '../../../runtime/infra-core-error.ts';
 import { AZURE_WORKER_CPU_SCALE_RULE } from '../../../constants/azure-container-apps.ts';
+import { DEPLOYED_AT_ENV_VAR } from '../../../constants/deploy-revision.ts';
 
 export interface CreateOrUpdateContainerAppOptions {
   credentials: AzureCredentials;
@@ -86,9 +87,12 @@ export async function createOrUpdateContainerApp(
     credentials.subscriptionId,
   );
 
-  // Build environment variables: plain env vars + secret references
+  // Build environment variables: plain env vars + secret references.
+  // DEPLOYED_AT starts a new revision on every deploy, so the replicas read
+  // the secrets again (same tag included).
   const allEnvVars = [
     ...envVars.map((e) => ({ name: e.name, value: e.value })),
+    { name: DEPLOYED_AT_ENV_VAR, value: new Date().toISOString() },
     ...secretEnvVars.map((e) => ({ name: e.name, secretRef: e.secretRef })),
   ];
 
@@ -97,7 +101,7 @@ export async function createOrUpdateContainerApp(
     name: containerAppName,
     image,
     resources: { cpu, memory },
-    env: allEnvVars.length > 0 ? allEnvVars : undefined,
+    env: allEnvVars,
     command: command && command.length > 0 ? command : undefined,
   };
 

@@ -3,14 +3,18 @@
  */
 
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
+import { NAMING_SCHEME_OUTPUT } from '../../constants/resource-naming.ts';
+import type { NamingScheme } from '../../types/config.ts';
 
 export interface OutputsConfig {
+  /** The environment's naming scheme, recorded in its Terraform state */
+  naming: NamingScheme;
   /** SPA services to generate bucket outputs for */
   spaServices?: Array<{ name: string }>;
 }
 
-export function generateOutputsTf(config: OutputsConfig = {}): string {
-  const { spaServices = [] } = config;
+export function generateOutputsTf(config: OutputsConfig): string {
+  const { naming, spaServices = [] } = config;
 
   const spaBucketOutputs = spaServices
     .map(
@@ -69,6 +73,13 @@ output "project_number" {
   value       = data.google_project.current.number
 }
 
+# Read by every command to name Cloud Run services, jobs and buckets the way
+# this environment was first deployed (never changes once deployed)
+output "${NAMING_SCHEME_OUTPUT}" {
+  description = "How this environment names its resources (legacy or unique)"
+  value       = "${naming}"
+}
+
 # ─────────────────────────────────────────
 # Database (Cloud SQL)
 # ─────────────────────────────────────────
@@ -86,6 +97,26 @@ output "database_connection_name" {
 output "database_private_ip" {
   description = "Private IP address of the Cloud SQL instance"
   value       = google_sql_database_instance.postgres.private_ip_address
+}
+
+output "db_admin_password_secret" {
+  description = "Secret Manager secret with the postgres user's password (db-init)"
+  value       = google_secret_manager_secret.db_admin_password.secret_id
+}
+
+output "db_jobs_service_account_email" {
+  description = "Service account of db-init"
+  value       = google_service_account.db_jobs.email
+}
+
+output "db_exports_bucket" {
+  description = "Bucket of the saved databases (infra:remove-service, infra:restore-database)"
+  value       = google_storage_bucket.db_exports.name
+}
+
+output "migration_service_account_emails" {
+  description = "Each database service's migration account (service name -> email)"
+  value       = { for k, v in google_service_account.migrate : k => v.email }
 }
 
 # ─────────────────────────────────────────

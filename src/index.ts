@@ -32,6 +32,7 @@ export type {
   AWSInfraConfig,
   GCPInfraConfig,
   InfraConfig,
+  NamingScheme,
 } from './types/index.ts';
 
 // Runtime types
@@ -54,6 +55,14 @@ export type {
 export { defaultLogger } from './runtime/index.ts';
 export { InfraCoreError } from './runtime/index.ts';
 
+// Generators shared by every provider
+export {
+  generateDbInit,
+  type DbInitCloud,
+  type DbInitFiles,
+  type GenerateDbInitOptions,
+} from './generators/shared/generate-db-init.ts';
+
 // Provider-specific generators (namespaced to avoid name collisions)
 export * as azure from './generators/azure/index.ts';
 export * as gcp from './generators/gcp/index.ts';
@@ -69,6 +78,14 @@ export { toDnsAuthName } from './utils/gcp/to-dns-auth-name.ts';
 
 // GCP utilities
 export { buildGCPClientOptions } from './utils/gcp/build-gcp-client-options.ts';
+export { buildGcpCloudRunName } from './utils/gcp/build-gcp-cloud-run-name.ts';
+export { buildGcsStorageBucketName } from './utils/gcp/build-gcs-storage-bucket-name.ts';
+export { buildAzureStorageContainerName } from './utils/azure/build-azure-storage-container-name.ts';
+export { buildS3StorageBucketName } from './utils/aws/build-s3-storage-bucket-name.ts';
+export { buildAccountSuffix } from './utils/naming/build-account-suffix.ts';
+export { buildAzureUniqueName } from './utils/azure/build-azure-unique-name.ts';
+export { buildAzureResourceName } from './utils/azure/build-azure-resource-name.ts';
+export type { AzureUniqueResource } from './utils/azure/build-azure-resource-name.ts';
 
 // Terraform execution (from Phase 25c)
 export {
@@ -149,6 +166,8 @@ export type {
   UpdateEcsServiceResult,
 } from './deploy/aws/ecs/update-ecs-service.ts';
 export { executeEcsTask } from './deploy/aws/ecs/execute-ecs-task.ts';
+export { readEcsTaskOutcome } from './deploy/aws/ecs/read-ecs-task-outcome.ts';
+export type { EcsTaskOutcome } from './deploy/aws/ecs/read-ecs-task-outcome.ts';
 export type {
   EcsTaskOptions,
   EcsTaskResult,
@@ -195,6 +214,8 @@ export type {
 } from './deploy/azure/container-apps/deploy-with-activation-check.ts';
 // GCP Cloud Run
 export { deployCloudRunService } from './deploy/gcp/cloud-run-services.ts';
+export { waitForCloudRunService } from './deploy/gcp/wait-for-cloud-run-service.ts';
+export type { WaitForCloudRunServiceOptions } from './deploy/gcp/wait-for-cloud-run-service.ts';
 export type {
   CloudRunServiceOptions,
   CloudRunServiceResult,
@@ -254,6 +275,27 @@ export {
   AWS_KONG_CLOUD_MAP_NAME,
   DEFAULT_SERVICE_LOG_LEVEL,
   DEFAULT_TRACE_SAMPLE_RATE,
+  DEFAULT_SCHEDULED_JOB_METHOD,
+  DEFAULT_SCHEDULED_JOB_TIMEZONE,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
+  NAMING_SCHEMES,
+  NAMING_SCHEME_OUTPUT,
+  ACCOUNT_SUFFIX_LENGTH,
+  GCP_CLOUD_RUN_NAME_MAX_LENGTH,
+  GCP_RUN_APP_HOST_LABEL_MAX_LENGTH,
+  GCS_BUCKET_NAME_MAX_LENGTH,
+  GCP_PROJECT_LABEL,
+  GCP_SCHEDULER_PROJECT_DESCRIPTION_PREFIX,
+  AZURE_NAME_MAX_LENGTH,
+  AZURE_NAME_HASH_LENGTH,
+  DEPLOYED_AT_ENV_VAR,
+  DB_EXPORT_RETENTION_DAYS,
+  DB_EXPORT_JOB_TIMEOUT_SECONDS,
+  DB_EXPORT_REASONS,
+  DB_EXPORT_FILE_EXTENSION,
+  DB_SERVER_POSTGRES_VERSION,
+  DB_EXPORT_AZURE_CONTAINER,
+  ECS_TASK_EXIT_CODE_GRACE_POLLS,
 } from './constants/index.ts';
 export {
   GCP_DATABASE_CONNECTION_LIMITS,

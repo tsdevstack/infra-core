@@ -10,6 +10,11 @@
  * vault and its own vault only. The shared identity reaches only shared
  * things (registry, shared vault, buckets), and every Container App carries
  * it, so it never gets a service vault.
+ *
+ * The database jobs (db-init) run as their own identity: they pull their
+ * image, read the admin password and write MIGRATION_DATABASE_URL in the
+ * database jobs' vault, and write DATABASE_URL in each database service's
+ * vault. No service identity reaches the database jobs' vault.
  */
 
 export function generateContainerAppsIdentityTf(): string {
@@ -72,6 +77,45 @@ resource "azurerm_role_assignment" "service_secrets_own_vault" {
   scope                            = "\${data.azurerm_resource_group.main.id}/providers/Microsoft.KeyVault/vaults/\${each.value}"
   role_definition_name             = "Key Vault Secrets User"
   principal_id                     = azurerm_user_assigned_identity.service_secrets[each.key].principal_id
+  skip_service_principal_aad_check = true
+}
+
+# =============================================================================
+# Database jobs identity (db-init)
+# Sets up each service's owner and app role: the server admin's password and
+# MIGRATION_DATABASE_URL live in the database jobs' vault (services can't read
+# it), DATABASE_URL in each database service's own vault.
+# =============================================================================
+
+resource "azurerm_user_assigned_identity" "db_jobs" {
+  name                = "\${var.project_name}-\${var.environment}-db-jobs"
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+  tags                = local.tags
+}
+
+resource "azurerm_role_assignment" "db_jobs_acr_pull" {
+  scope                            = azurerm_container_registry.main.id
+  role_definition_name             = "AcrPull"
+  principal_id                     = azurerm_user_assigned_identity.db_jobs.principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "db_jobs_own_vault" {
+  # The CLI creates the vault before Terraform runs; referenced by ID so
+  # infra:plan works before it exists
+  scope                            = "\${data.azurerm_resource_group.main.id}/providers/Microsoft.KeyVault/vaults/\${var.db_jobs_key_vault}"
+  role_definition_name             = "Key Vault Secrets Officer"
+  principal_id                     = azurerm_user_assigned_identity.db_jobs.principal_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "db_jobs_service_vaults" {
+  for_each = var.database_service_key_vaults
+
+  scope                            = "\${data.azurerm_resource_group.main.id}/providers/Microsoft.KeyVault/vaults/\${each.value}"
+  role_definition_name             = "Key Vault Secrets Officer"
+  principal_id                     = azurerm_user_assigned_identity.db_jobs.principal_id
   skip_service_principal_aad_check = true
 }
 `;

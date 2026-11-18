@@ -1,8 +1,15 @@
 /**
- * Generate database.tf with PostgreSQL Flexible Server and per-service databases
+ * Generate database.tf with PostgreSQL Flexible Server and per-service
+ * databases, and the storage of saved databases
  */
 
 import type { AzureInfraConfig } from '../../types/config.ts';
+import {
+  DB_EXPORT_AZURE_CONTAINER,
+  DB_EXPORT_RETENTION_DAYS,
+  DB_SERVER_POSTGRES_VERSION,
+} from '../../constants/database-export.ts';
+import { buildAzureResourceName } from '../../utils/azure/build-azure-resource-name.ts';
 
 export function generateDatabaseTf(config: AzureInfraConfig): string {
   const serviceDatabases = config.servicesWithDatabase
@@ -45,6 +52,16 @@ resource "azurerm_postgresql_flexible_server_configuration" "query_store_waits" 
 }
 `;
 
+  const exportsStorageAccount = buildAzureResourceName(
+    'dbExportsStorageAccount',
+    {
+      projectName: config.projectName,
+      environment: config.environment,
+      naming: config.naming,
+      subscriptionId: config.subscriptionId,
+    },
+  );
+
   // Default name stays a Terraform expression so existing projects generate unchanged
   const serverName =
     config.database.serverName !== undefined
@@ -71,7 +88,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
   name                          = ${serverName}
   resource_group_name           = data.azurerm_resource_group.main.name
   location                      = data.azurerm_resource_group.main.location
-  version                       = "16"
+  version                       = "${DB_SERVER_POSTGRES_VERSION.azure}"
   delegated_subnet_id           = azurerm_subnet.postgres.id
   private_dns_zone_id           = azurerm_private_dns_zone.postgres.id
   administrator_login           = "tsdevstack"
@@ -123,5 +140,64 @@ resource "azurerm_postgresql_flexible_server_configuration" "enhanced_metrics" {
   value      = "on"
   depends_on = [azurerm_postgresql_flexible_server_configuration.require_ssl]
 }
-${queryStoreBlock}`;
+${queryStoreBlock}
+# =============================================================================
+# Saved databases: infra:remove-service saves a service's database here
+# before it drops it, and infra:restore-database saves the current contents
+# before it replaces them ({service}/{time}-{reason}.dump). One storage
+# account for the environment, with one private container: one per service
+# would go with the service at the next deploy, and its file with it. Files
+# are deleted after ${DB_EXPORT_RETENTION_DAYS} days (no soft delete); destroy deletes them
+# with the account.
+# =============================================================================
+
+resource "azurerm_storage_account" "db_exports" {
+  name                            = "${exportsStorageAccount}"
+  resource_group_name             = data.azurerm_resource_group.main.name
+  location                        = data.azurerm_resource_group.main.location
+  account_tier                    = "Standard"
+  account_replication_type        = "LRS"
+  min_tls_version                 = "TLS1_2"
+  allow_nested_items_to_be_public = false
+  tags                            = local.tags
+}
+
+resource "azurerm_storage_container" "db_exports" {
+  name                  = "${DB_EXPORT_AZURE_CONTAINER}"
+  storage_account_id    = azurerm_storage_account.db_exports.id
+  container_access_type = "private"
+}
+
+# Azure deletes a file once a day after it is older than this
+resource "azurerm_storage_management_policy" "db_exports" {
+  storage_account_id = azurerm_storage_account.db_exports.id
+
+  rule {
+    name    = "delete-saved-databases"
+    enabled = true
+
+    filters {
+      blob_types = ["blockBlob"]
+    }
+
+    actions {
+      base_blob {
+        delete_after_days_since_creation_greater_than = ${DB_EXPORT_RETENTION_DAYS}
+      }
+    }
+  }
+}
+
+# Only db-init (the database jobs' identity) writes and reads the files.
+# Storage Blob Data Contributor is the one storage role the deploy account
+# may give (Azure account setup, step 5), so it could also delete them. The
+# deploy account lists them with the account's key (the check before a
+# removal, the choice of file for a restore).
+resource "azurerm_role_assignment" "db_jobs_exports" {
+  scope                            = azurerm_storage_account.db_exports.id
+  role_definition_name             = "Storage Blob Data Contributor"
+  principal_id                     = azurerm_user_assigned_identity.db_jobs.principal_id
+  skip_service_principal_aad_check = true
+}
+`;
 }

@@ -104,9 +104,12 @@ variable "nextjs_services" {
 variable "scheduled_jobs" {
   description = "Map of scheduled jobs"
   type = map(object({
-    schedule    = string  # EventBridge schedule expression (e.g., cron(0 * * * ? *))
-    serviceName = string
-    path        = string
+    schedule       = string  # EventBridge schedule expression (e.g., cron(0 * * * ? *))
+    serviceName    = string
+    path           = string
+    method         = string  # HTTP method of the call
+    timeoutSeconds = number  # How long the invoker waits for the response (httpTimeout)
+    timezone       = string  # IANA time zone the schedule runs in
   }))
   default = {}
 }
@@ -281,9 +284,12 @@ variable "nextjs_services" {
 variable "scheduled_jobs" {
   description = "Map of scheduled jobs"
   type = map(object({
-    schedule    = string  # EventBridge schedule expression (e.g., cron(0 * * * ? *))
-    serviceName = string
-    path        = string
+    schedule       = string  # EventBridge schedule expression (e.g., cron(0 * * * ? *))
+    serviceName    = string
+    path           = string
+    method         = string  # HTTP method of the call
+    timeoutSeconds = number  # How long the invoker waits for the response (httpTimeout)
+    timezone       = string  # IANA time zone the schedule runs in
   }))
   default = {}
 }

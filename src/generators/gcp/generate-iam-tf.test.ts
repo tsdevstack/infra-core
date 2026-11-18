@@ -25,14 +25,21 @@ describe('generateIamTf', () => {
     it('should define services list with single service', () => {
       const result = generateIamTf(singleService);
       expect(result).toContain('locals {');
-      expect(result).toContain('services = ["auth-service"]');
+      expect(result).toContain('services          = ["auth-service"]');
     });
 
     it('should define services list with multiple services', () => {
       const result = generateIamTf(multipleServices);
       expect(result).toContain(
-        'services = ["auth-service", "bff-service", "frontend"]',
+        'services          = ["auth-service", "bff-service", "frontend"]',
       );
+    });
+
+    it('should list the services with a database (none by default)', () => {
+      expect(generateIamTf(singleService)).toContain('database_services = []');
+      expect(
+        generateIamTf(multipleServices, [], ['auth-service', 'bff-service']),
+      ).toContain('database_services = ["auth-service", "bff-service"]');
     });
   });
 
@@ -117,13 +124,15 @@ describe('generateIamTf', () => {
     it('should include condition block', () => {
       const result = generateIamTf(singleService);
       expect(result).toContain('condition {');
-      expect(result).toContain('title       = "${each.key}-secrets-only"');
+      expect(result).toContain(
+        'title       = "${each.key}-secrets-no-owner-url"',
+      );
     });
 
     it('should include condition description', () => {
       const result = generateIamTf(singleService);
       expect(result).toContain(
-        'description = "Allow access to shared secrets and ${each.key}-specific secrets only"',
+        'description = "Allow access to shared secrets and ${each.key}-specific secrets only, without its MIGRATION_DATABASE_URL"',
       );
     });
 
@@ -232,7 +241,7 @@ describe('generateIamTf', () => {
       expect(result).toContain('secret_scope_exclusions = tomap({');
       expect(result).toContain('"auth" = ["auth-service"]');
       expect(result).toContain(
-        '${join("", [for other in lookup(local.secret_scope_exclusions, each.key, []) : " && !resource.name.startsWith(\\"projects/${data.google_project.current.number}/secrets/${var.project_name}-${other}-\\")"])}"',
+        '${join("", [for other in lookup(local.secret_scope_exclusions, each.key, []) : " && !resource.name.startsWith(\\"projects/${data.google_project.current.number}/secrets/${var.project_name}-${other}-\\")"])} && !(',
       );
     });
 
@@ -252,6 +261,93 @@ describe('generateIamTf', () => {
       expect(expression).toMatch(
         /-shared-\\"\) \|\| resource\.name\.startsWith\(.*-\$\{each\.key\}-\\"\)\$\{join/,
       );
+    });
+  });
+
+  describe('Database users', () => {
+    const owner =
+      'projects/${data.google_project.current.number}/secrets/${var.project_name}-${each.key}-MIGRATION_DATABASE_URL';
+
+    it("should keep each service's runtime account away from its owner role's URL", () => {
+      const result = generateIamTf(singleService, [], ['auth-service']);
+      expect(result).toContain(
+        `\${exclusions()}&& !(resource.name == \\"${owner}\\" || resource.name.startsWith(\\"${owner}/\\"))"`.replace(
+          '${exclusions()}',
+          '',
+        ),
+      );
+    });
+
+    it('should swap the runtime binding without a gap (new title, created first)', () => {
+      const result = generateIamTf(singleService);
+      const binding = result.slice(
+        result.indexOf(
+          'resource "google_project_iam_member" "runtime_secrets"',
+        ),
+      );
+      expect(binding).toContain('create_before_destroy = true');
+    });
+
+    it("should let the database jobs read the admin password and each DATABASE_URL, not the owner's URL", () => {
+      const result = generateIamTf(singleService, [], ['auth-service']);
+      const read = result.slice(
+        result.indexOf('"db_jobs_secrets_read"'),
+        result.indexOf('"db_jobs_secrets_write"'),
+      );
+      for (const name of ['db-admin-password', 'auth-service-DATABASE_URL']) {
+        expect(read).toContain(
+          `resource.name == \\"projects/\${data.google_project.current.number}/secrets/\${var.project_name}-${name}\\"`,
+        );
+      }
+      expect(read).not.toContain('MIGRATION_DATABASE_URL');
+      expect(read).toContain('roles/secretmanager.secretAccessor');
+    });
+
+    it('should let the database jobs add versions to DATABASE_URL only', () => {
+      const result = generateIamTf(singleService, [], ['auth-service']);
+      const write = result.slice(
+        result.indexOf('"db_jobs_secrets_write"'),
+        result.indexOf('# Migration jobs:'),
+      );
+      expect(write).toContain('roles/secretmanager.secretVersionAdder');
+      expect(write).toContain('auth-service-DATABASE_URL');
+      expect(write).not.toContain('MIGRATION_DATABASE_URL');
+      expect(write).not.toContain('db-admin-password');
+    });
+
+    it('should keep the database jobs account without database services (remove-service drops the last roles)', () => {
+      const result = generateIamTf(singleService);
+      expect(result).toContain('resource "google_service_account" "db_jobs"');
+      expect(result).toContain('"db_jobs_secrets_read"');
+      expect(result).not.toContain('"db_jobs_secrets_write"');
+    });
+
+    it('should give each database service a migration account as long as its runtime one', () => {
+      const result = generateIamTf(singleService, [], ['auth-service']);
+      const account = result.slice(
+        result.indexOf('resource "google_service_account" "migrate"'),
+        result.indexOf('"migrate_secrets"'),
+      );
+      expect(account).toContain('for_each = toset(local.database_services)');
+      expect(account).toContain(
+        'account_id   = "${var.project_name}-${each.key}-mg"',
+      );
+    });
+
+    it("should let a migration account read only its own service's owner URL", () => {
+      const result = generateIamTf(singleService, [], ['auth-service']);
+      const binding = result.slice(result.indexOf('"migrate_secrets"'));
+      expect(binding).toContain('for_each = toset(local.database_services)');
+      expect(binding).toContain('roles/secretmanager.secretAccessor');
+      expect(binding).toContain(
+        'member  = "serviceAccount:${google_service_account.migrate[each.key].email}"',
+      );
+      expect(binding).toContain(
+        `expression  = "resource.name == \\"${owner}\\" || resource.name.startsWith(\\"${owner}/\\")"`,
+      );
+      // Not the app role's URL (-DATABASE_URL), only -MIGRATION_DATABASE_URL
+      expect(binding).not.toContain('-DATABASE_URL');
+      expect(binding).not.toContain('db-admin-password');
     });
   });
 

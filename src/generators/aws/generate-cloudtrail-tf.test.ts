@@ -74,6 +74,17 @@ describe('generateCloudtrailTf', () => {
       expect(result).toContain('AWSCloudTrailAclCheck');
       expect(result).toContain('AWSCloudTrailWrite');
     });
+
+    it('should refuse requests without HTTPS', () => {
+      const start = result.indexOf(
+        'resource "aws_s3_bucket_policy" "cloudtrail"',
+      );
+      const policy = result.slice(start, result.indexOf('\n}\n', start));
+      expect(policy).toContain('Sid       = "DenyInsecureTransport"');
+      expect(policy).toContain(
+        'Resource  = [aws_s3_bucket.cloudtrail.arn, "${aws_s3_bucket.cloudtrail.arn}/*"]',
+      );
+    });
   });
 
   describe('CloudTrail resource', () => {
@@ -138,6 +149,17 @@ describe('generateCloudtrailTf', () => {
 
     it('should document compliance purpose in header', () => {
       expect(result).toContain('CloudTrail Audit Logging');
+    });
+  });
+
+  describe('storage access trail', () => {
+    it("should let the storage buckets' access trail write to the bucket too", () => {
+      expect(result).toContain(
+        'trail/${var.project_name}-trail",\n    "arn:aws:cloudtrail:${var.aws_region}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-storage-trail",',
+      );
+      expect(
+        result.match(/"AWS:SourceArn" = local\.cloudtrail_trail_arns/g),
+      ).toHaveLength(2);
     });
   });
 });

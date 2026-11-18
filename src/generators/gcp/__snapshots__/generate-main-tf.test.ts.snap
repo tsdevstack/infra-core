@@ -12,6 +12,10 @@ terraform {
       source  = "hashicorp/google"
       version = "~> 8.9"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 
   backend "gcs" {
@@ -42,6 +46,10 @@ terraform {
     google = {
       source  = "hashicorp/google"
       version = "~> 8.9"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
     }
   }
 

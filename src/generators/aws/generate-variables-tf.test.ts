@@ -77,9 +77,12 @@ describe('generateVariablesTf', () => {
     it('should define scheduled_jobs map variable', () => {
       const result = generateVariablesTf([]);
       expect(result).toContain('variable "scheduled_jobs"');
-      expect(result).toContain('schedule    = string');
-      expect(result).toContain('serviceName = string');
-      expect(result).toContain('path        = string');
+      expect(result).toContain('schedule       = string');
+      expect(result).toContain('serviceName    = string');
+      expect(result).toContain('path           = string');
+      expect(result).toContain('method         = string');
+      expect(result).toContain('timeoutSeconds = number');
+      expect(result).toContain('timezone       = string');
     });
   });
 

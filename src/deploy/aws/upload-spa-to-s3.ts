@@ -18,6 +18,7 @@ import type { InfraCoreRuntime } from '../../types/runtime.ts';
 import { getMimeType } from '../../utils/fs/get-mime-type.ts';
 import { getCacheControl } from '../../utils/fs/get-cache-control.ts';
 import { getAllFiles } from '../../utils/fs/get-all-files.ts';
+import { shouldDeleteOldSpaFile } from '../../utils/fs/should-delete-old-spa-file.ts';
 
 export interface UploadSpaToS3Options {
   /** S3 bucket name */
@@ -31,8 +32,10 @@ export interface UploadSpaToS3Options {
 export interface UploadSpaToS3Result {
   /** Number of files uploaded */
   filesUploaded: number;
-  /** Number of files deleted (stale) */
+  /** Files left out of this build and last uploaded more than a day ago: deleted */
   filesDeleted: number;
+  /** Files left out of this build but uploaded within a day: kept for now */
+  filesKept: number;
 }
 
 /**
@@ -66,8 +69,8 @@ export async function uploadSpaToS3(
   const localFiles = getAllFiles(sourceDir);
   runtime.logger.info(`Found ${localFiles.length} files to upload`);
 
-  // Get existing files in bucket
-  const existingFileNames = new Set<string>();
+  // Get existing files in bucket, with their last upload time
+  const existingFileNames = new Map<string, Date | undefined>();
   let continuationToken: string | undefined;
 
   do {
@@ -80,7 +83,7 @@ export async function uploadSpaToS3(
 
     for (const obj of listResponse.Contents ?? []) {
       if (obj.Key) {
-        existingFileNames.add(obj.Key);
+        existingFileNames.set(obj.Key, obj.LastModified);
       }
     }
 
@@ -109,9 +112,18 @@ export async function uploadSpaToS3(
     existingFileNames.delete(relativePath);
   }
 
-  // Delete stale files (files in bucket but not in local build)
+  // Files left out of this build: deleted once their last upload is more
+  // than a day old, so a visitor with the previous version open can still
+  // load its files
+  const now = new Date();
   let filesDeleted = 0;
-  const staleFiles = Array.from(existingFileNames);
+  const staleFiles: string[] = [];
+  for (const [staleName, lastUploaded] of existingFileNames) {
+    if (shouldDeleteOldSpaFile(lastUploaded, now)) {
+      staleFiles.push(staleName);
+    }
+  }
+  const filesKept = existingFileNames.size - staleFiles.length;
 
   if (staleFiles.length > 0) {
     // S3 DeleteObjects can handle up to 1000 objects at a time
@@ -130,9 +142,7 @@ export async function uploadSpaToS3(
 
       filesDeleted += batch.length;
     }
-
-    runtime.logger.info(`Deleted ${filesDeleted} stale files`);
   }
 
-  return { filesUploaded, filesDeleted };
+  return { filesUploaded, filesDeleted, filesKept };
 }

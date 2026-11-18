@@ -13,6 +13,8 @@ export type {
   WaitForEcsStableResult,
 } from './wait-for-ecs-stable.ts';
 export { executeEcsTask } from './execute-ecs-task.ts';
+export { readEcsTaskOutcome } from './read-ecs-task-outcome.ts';
+export type { EcsTaskOutcome } from './read-ecs-task-outcome.ts';
 export type { EcsTaskOptions, EcsTaskResult } from './execute-ecs-task.ts';
 export { deleteEcsService } from './delete-ecs-service.ts';
 export type {

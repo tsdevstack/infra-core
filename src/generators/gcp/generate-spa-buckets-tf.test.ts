@@ -24,11 +24,10 @@ describe('generateSpaBucketsTf', () => {
       expect(result).toContain('not_found_page   = "index.html"');
     });
 
-    it('should configure public access', () => {
+    it('should keep the bucket private (the load balancer reads it, loadbalancer.tf)', () => {
       const result = generateSpaBucketsTf([{ name: 'app' }]);
-      expect(result).toContain('google_storage_bucket_iam_member');
-      expect(result).toContain('roles/storage.objectViewer');
-      expect(result).toContain('allUsers');
+      expect(result).not.toContain('google_storage_bucket_iam_member');
+      expect(result).not.toContain('allUsers');
     });
 
     it('should use uniform bucket level access', () => {
@@ -36,10 +35,14 @@ describe('generateSpaBucketsTf', () => {
       expect(result).toContain('uniform_bucket_level_access = true');
     });
 
+    it('should enforce public access prevention', () => {
+      const result = generateSpaBucketsTf([{ name: 'app' }]);
+      expect(result).toContain('public_access_prevention    = "enforced"');
+    });
+
     it('should convert service name to terraform-safe ID', () => {
       const result = generateSpaBucketsTf([{ name: 'react-app' }]);
       expect(result).toContain('"react_app_spa"');
-      expect(result).toContain('react_app_spa_public');
     });
   });
 
@@ -51,12 +54,6 @@ describe('generateSpaBucketsTf', () => {
       ]);
       expect(result).toContain('frontend_spa');
       expect(result).toContain('admin_panel_spa');
-    });
-
-    it('should generate IAM bindings for all services', () => {
-      const result = generateSpaBucketsTf([{ name: 'app' }, { name: 'docs' }]);
-      expect(result).toContain('app_spa_public');
-      expect(result).toContain('docs_spa_public');
     });
   });
 

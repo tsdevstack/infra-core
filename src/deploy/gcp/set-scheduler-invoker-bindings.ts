@@ -17,6 +17,7 @@ export interface SetSchedulerInvokerBindingsOptions {
   projectId: string;
   projectName: string;
   region: string;
+  /** Cloud Run names of the services the jobs call (buildGcpCloudRunName) */
   targetServices: string[];
   credentials: GCPCredentials;
 }

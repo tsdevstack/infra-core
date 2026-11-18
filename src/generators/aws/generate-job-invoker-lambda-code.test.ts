@@ -1,5 +1,28 @@
-import { describe, it, expect } from '@rstest/core';
+import { describe, it, expect, rs, afterEach } from '@rstest/core';
 import { generateJobInvokerLambdaCode } from './generate-job-invoker-lambda-code';
+
+type Handler = (event: Record<string, unknown>) => Promise<unknown>;
+
+/**
+ * Load the generated handler with a fake Secrets Manager and return it.
+ * The code is plain CommonJS, so it runs as is.
+ */
+function loadHandler(): Handler {
+  const exportsObject: { handler?: Handler } = {};
+  const fakeRequire = (): Record<string, unknown> => ({
+    SecretsManagerClient: function () {
+      return { send: async () => ({ SecretString: 'job-secret' }) };
+    },
+    GetSecretValueCommand: function () {},
+  });
+  new Function('require', 'exports', 'process', generateJobInvokerLambdaCode())(
+    fakeRequire,
+    exportsObject,
+    { env: { CLOUDMAP_NAMESPACE: 'myapp.local', JOB_SECRET_ARN: 'arn' } },
+  );
+  if (!exportsObject.handler) throw new Error('no handler exported');
+  return exportsObject.handler;
+}
 
 describe('generateJobInvokerLambdaCode', () => {
   describe('imports', () => {
@@ -41,16 +64,17 @@ describe('generateJobInvokerLambdaCode', () => {
   });
 
   describe('handler', () => {
-    it('should extract serviceName, path and jobName from event', () => {
+    it('should read the job, its method and its wait from the event', () => {
       const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('const { serviceName, path, jobName } = event;');
+      expect(result).toContain("method = 'POST',");
+      expect(result).toContain('timeoutSeconds = 300,');
     });
 
     it('should start every line with the job name', () => {
       const result = generateJobInvokerLambdaCode();
       expect(result).toContain('console.log(`job=${job} ${message}`)');
       expect(result).toContain('console.error(`job=${job} ${message}`)');
-      expect(result).toContain('log(`Run started: POST ${url}`);');
+      expect(result).toContain('log(`Run started: ${method} ${url}`);');
       expect(result).toContain(
         'log(`Run finished: ${response.status} in ${Date.now() - started}ms`);',
       );
@@ -89,19 +113,65 @@ describe('generateJobInvokerLambdaCode', () => {
       );
     });
 
-    it('should use POST method', () => {
-      const result = generateJobInvokerLambdaCode();
-      expect(result).toContain("method: 'POST'");
-    });
-
     it('should include X-Job-Secret header', () => {
       const result = generateJobInvokerLambdaCode();
       expect(result).toContain("'X-Job-Secret': SecretString");
     });
+  });
 
-    it("should time out the call before the function's 300 s timeout", () => {
-      const result = generateJobInvokerLambdaCode();
-      expect(result).toContain('signal: AbortSignal.timeout(290000)');
+  describe('running the handler', () => {
+    const fetchMock = rs.fn();
+
+    afterEach(() => {
+      rs.restoreAllMocks();
+      rs.unstubAllGlobals();
+      fetchMock.mockReset();
+    });
+
+    function stubFetch(): void {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => 'done',
+      });
+      rs.stubGlobal('fetch', fetchMock);
+      rs.spyOn(console, 'log').mockImplementation(() => undefined);
+    }
+
+    it("should call with the job's method and wait its httpTimeout", async () => {
+      stubFetch();
+      const timeoutSpy = rs.spyOn(AbortSignal, 'timeout');
+
+      await loadHandler()({
+        serviceName: 'reports-service',
+        path: '/jobs/generate',
+        jobName: 'reports-service-generate',
+        method: 'GET',
+        timeoutSeconds: 600,
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://reports-service.myapp.local:8080/jobs/generate',
+        expect.objectContaining({ method: 'GET' }),
+      );
+      expect(timeoutSpy).toHaveBeenCalledWith(600_000);
+    });
+
+    it('should send POST and wait 300 s for an event from an older schedule', async () => {
+      stubFetch();
+      const timeoutSpy = rs.spyOn(AbortSignal, 'timeout');
+
+      await loadHandler()({
+        serviceName: 'auth-service',
+        path: '/jobs/cleanup',
+        jobName: 'auth-service-cleanup',
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://auth-service.myapp.local:8080/jobs/cleanup',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(timeoutSpy).toHaveBeenCalledWith(300_000);
     });
   });
 

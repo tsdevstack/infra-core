@@ -4,6 +4,7 @@
  * Creates:
  * - S3 bucket for ALB access logs (with ELB service principal policy)
  * - S3 bucket for CloudFront standard logs (with ACL for log delivery)
+ * - Both: public access blocked, requests without HTTPS refused
  * - CloudWatch Log Group for WAF (CloudFront scope)
  * - WAF logging configuration for the CloudFront Web ACL
  *
@@ -12,6 +13,7 @@
  */
 
 import { AWS_WAF_REDACTED_HEADERS } from '../../constants/index.ts';
+import { buildDenyInsecureTransportStatement } from '../../utils/aws/build-deny-insecure-transport-statement.ts';
 
 export function generateLoggingTf(): string {
   const redactedHeaders = AWS_WAF_REDACTED_HEADERS.map(
@@ -53,7 +55,18 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
   }
 }
 
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 resource "aws_s3_bucket_policy" "alb_logs" {
+  depends_on = [aws_s3_bucket_public_access_block.alb_logs]
+
   bucket = aws_s3_bucket.alb_logs.id
 
   policy = jsonencode({
@@ -67,7 +80,8 @@ resource "aws_s3_bucket_policy" "alb_logs" {
         }
         Action   = "s3:PutObject"
         Resource = "\${aws_s3_bucket.alb_logs.arn}/*"
-      }
+      },
+${buildDenyInsecureTransportStatement('aws_s3_bucket.alb_logs.arn', '      ')}
     ]
   })
 }
@@ -98,6 +112,32 @@ resource "aws_s3_bucket_acl" "cloudfront_logs" {
 
   bucket = aws_s3_bucket.cloudfront_logs.id
   acl    = "log-delivery-write"
+}
+
+# log-delivery-write grants the Log Delivery group, not the public, so
+# blocking public ACLs keeps it working
+resource "aws_s3_bucket_public_access_block" "cloudfront_logs" {
+  depends_on = [aws_s3_bucket_acl.cloudfront_logs]
+
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_policy" "cloudfront_logs" {
+  depends_on = [aws_s3_bucket_public_access_block.cloudfront_logs]
+
+  bucket = aws_s3_bucket.cloudfront_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+${buildDenyInsecureTransportStatement('aws_s3_bucket.cloudfront_logs.arn', '      ')}
+    ]
+  })
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "cloudfront_logs" {

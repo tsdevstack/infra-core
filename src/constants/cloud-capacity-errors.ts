@@ -13,6 +13,11 @@
  *   `InsufficientCacheClusterCapacity`.
  * - Azure: `RegionalAllocationFailed` (PostgreSQL Flexible Server),
  *   `ZonalAllocationFailed` and `AllocationFailed` (compute allocation).
+ *   Not App Service's "No available instances to satisfy this request"
+ *   (extended code 03029): every failed App Service plan create counts
+ *   toward a limit that then blocks plan creates for the subscription
+ *   (code 51025), so the deploy stops and explains it instead (cli-infra's
+ *   AZURE_APP_SERVICE_PLAN_ERRORS).
  */
 
 import type { CloudProvider } from '../types/credentials.ts';

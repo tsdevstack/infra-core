@@ -17,6 +17,8 @@ import type { GCPCredentials } from '../../types/credentials.ts';
 import { InfraCoreError } from '../../runtime/infra-core-error.ts';
 import { buildGCPClientOptions } from '../../utils/gcp/build-gcp-client-options.ts';
 import { setServiceInvokerPolicy } from './set-service-invoker-policy.ts';
+import { DEPLOYED_AT_ENV_VAR } from '../../constants/deploy-revision.ts';
+import { waitForCloudRunService } from './wait-for-cloud-run-service.ts';
 
 export interface CloudRunServiceOptions {
   projectId: string;
@@ -44,6 +46,9 @@ export interface CloudRunServiceOptions {
   // Optional container command override (default: use image entrypoint)
   // Used by workers to run `["node", "dist/worker.js"]` instead of main app
   command?: string[];
+  // Service labels (the unique scheme marks the project: GCP_PROJECT_LABEL).
+  // The update replaces the service, so labels not given here are removed.
+  labels?: Record<string, string>;
   // CPU idle setting (default: true for regular services)
   // Workers set this to false to keep CPU always allocated for queue processing
   cpuIdle?: boolean;
@@ -72,8 +77,12 @@ export async function deployCloudRunService(
   // Parse timeout (e.g., "300s" -> 300)
   const timeoutSeconds = parseInt(options.timeout.replace('s', ''), 10);
 
-  // Build environment variables
-  const envVars = Object.entries(options.envVars).map(([name, value]) => ({
+  // Build environment variables. DEPLOYED_AT starts a new revision on every
+  // deploy, so the instances read the secrets again (same tag included).
+  const envVars = Object.entries({
+    ...options.envVars,
+    [DEPLOYED_AT_ENV_VAR]: new Date().toISOString(),
+  }).map(([name, value]) => ({
     name,
     value,
   }));
@@ -161,6 +170,7 @@ export async function deployCloudRunService(
     name: serviceName,
     ingress: options.ingress,
     template: templateConfig,
+    ...(options.labels && { labels: options.labels }),
   };
 
   // Create or update service using allowMissing flag
@@ -172,7 +182,13 @@ export async function deployCloudRunService(
     });
 
     runtime.logger.info('Waiting for deployment to complete...');
-    const [service] = await operation.promise();
+    const service = await waitForCloudRunService({
+      operation,
+      getService: async (name) =>
+        (await servicesClient.getService({ name }))[0],
+      serviceName,
+      logger: runtime.logger,
+    });
 
     const serviceUrl = service.uri;
 

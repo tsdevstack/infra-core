@@ -34,7 +34,6 @@ export { generateNextjsCloudfrontTf } from './generate-nextjs-cloudfront-tf.ts';
 export { generateRedirectTf } from './generate-redirect-tf.ts';
 export { generateJobInvokerLambdaCode } from './generate-job-invoker-lambda-code.ts';
 export { generateDbInitTf } from './generate-db-init-tf.ts';
-export { generateDbInit, type DbInitFiles } from './generate-db-init.ts';
 export { generateDbDeleteTf } from './generate-db-delete-tf.ts';
 export { generateDbDelete, type DbDeleteFiles } from './generate-db-delete.ts';
 export { generateS3StorageTf } from './generate-s3-storage-tf.ts';

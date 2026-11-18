@@ -9,8 +9,11 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  naming: 'legacy',
   keyVaultName: 'myproject-dev-kv',
   serviceKeyVaults: {},
+  dbJobsKeyVault: 'test-dev-dbjobs',
+  databaseServiceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -168,6 +171,16 @@ describe('generateOutputsTf', () => {
         result.indexOf('output "database_admin_password"'),
       );
       expect(dbPasswordBlock).toContain('sensitive   = true');
+    });
+
+    it('should output the storage account and container of saved databases', () => {
+      const result = generateOutputsTf(baseConfig);
+      expect(result).toContain('output "db_exports_storage_account"');
+      expect(result).toContain('azurerm_storage_account.db_exports.name');
+      expect(result).toContain('output "db_exports_container_url"');
+      expect(result).toContain(
+        '"${azurerm_storage_account.db_exports.primary_blob_endpoint}${azurerm_storage_container.db_exports.name}"',
+      );
     });
   });
 

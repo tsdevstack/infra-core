@@ -9,8 +9,11 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  naming: 'legacy',
   keyVaultName: 'myproject-dev-kv',
   serviceKeyVaults: {},
+  dbJobsKeyVault: 'test-dev-dbjobs',
+  databaseServiceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -62,6 +65,26 @@ describe('generateScheduledJobsTf', () => {
     );
     expect(result).toContain('for_each = var.scheduled_jobs');
     expect(result).toContain('workload_profile_name      = "Consumption"');
+  });
+
+  it("should use the job's method and timeout in the call and the run limit", () => {
+    const result = generateScheduledJobsTf({
+      ...baseConfig,
+      scheduledJobs: {
+        'daily-cleanup': {
+          name: 'daily-cleanup',
+          schedule: '0 2 * * *',
+          targetService: 'auth-service',
+          endpoint: '/jobs/cleanup',
+        },
+      },
+    });
+
+    expect(result).toContain('method         = optional(string, "POST")');
+    expect(result).toContain('timeout        = optional(number, 240)');
+    expect(result).toContain('-X ${each.value.method}');
+    expect(result).toContain('--max-time ${each.value.timeout}');
+    expect(result).toContain('replica_timeout_in_seconds = each.value.timeout');
   });
 
   it('should reference resource group as data source', () => {

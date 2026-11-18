@@ -104,6 +104,12 @@ describe('generateOutputsTf', () => {
       expect(result).toContain('output "db_init_ecr_url"');
       expect(result).toContain('aws_ecr_repository.db_init.repository_url');
     });
+
+    it('should output the bucket of saved databases', () => {
+      const result = generateOutputsTf();
+      expect(result).toContain('output "db_exports_bucket"');
+      expect(result).toContain('aws_s3_bucket.db_exports.bucket');
+    });
   });
 
   describe('db-delete outputs', () => {

@@ -6,6 +6,9 @@ import type { AWSInfraConfig } from '../../types/config.ts';
 import {
   DEFAULT_SERVICE_LOG_LEVEL,
   DEFAULT_TRACE_SAMPLE_RATE,
+  DEFAULT_SCHEDULED_JOB_METHOD,
+  DEFAULT_SCHEDULED_JOB_TIMEZONE,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
 } from '../../constants/index.ts';
 
 export function generateTfvars(config: AWSInfraConfig): string {
@@ -166,9 +169,12 @@ function formatScheduledJobsMap(
   const lines = entries.map(
     ([name, cfg]) =>
       `  "${name}" = {
-    schedule    = "${cfg.schedule}"
-    serviceName = "${cfg.targetService}"
-    path        = "${cfg.endpoint}"
+    schedule       = "${cfg.schedule}"
+    serviceName    = "${cfg.targetService}"
+    path           = "${cfg.endpoint}"
+    method         = "${cfg.method ?? DEFAULT_SCHEDULED_JOB_METHOD}"
+    timeoutSeconds = ${cfg.httpTimeout ?? SCHEDULED_JOB_HTTP_TIMEOUT.aws.default}
+    timezone       = "${cfg.timezone ?? DEFAULT_SCHEDULED_JOB_TIMEZONE}"
   }`,
   );
 

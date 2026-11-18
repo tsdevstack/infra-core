@@ -18,6 +18,7 @@ import { InfraCoreError } from '../../runtime/infra-core-error.ts';
 import { getMimeType } from '../../utils/fs/get-mime-type.ts';
 import { getCacheControl } from '../../utils/fs/get-cache-control.ts';
 import { getAllFiles } from '../../utils/fs/get-all-files.ts';
+import { shouldDeleteOldSpaFile } from '../../utils/fs/should-delete-old-spa-file.ts';
 
 export interface UploadSpaToAzureStorageOptions {
   /** Azure Storage account name */
@@ -35,8 +36,10 @@ export interface UploadSpaToAzureStorageOptions {
 export interface UploadSpaToAzureStorageResult {
   /** Number of files uploaded */
   filesUploaded: number;
-  /** Number of files deleted (stale) */
+  /** Files left out of this build and last uploaded more than a day ago: deleted */
   filesDeleted: number;
+  /** Files left out of this build but uploaded within a day: kept for now */
+  filesKept: number;
 }
 
 /**
@@ -85,10 +88,10 @@ export async function uploadSpaToAzureStorage(
   const localFiles = getAllFiles(sourceDir);
   runtime.logger.info(`  Found ${localFiles.length} files to upload`);
 
-  // Get existing blobs
-  const existingBlobNames = new Set<string>();
+  // Get existing blobs, with their last upload time
+  const existingBlobNames = new Map<string, Date | undefined>();
   for await (const blob of containerClient.listBlobsFlat()) {
-    existingBlobNames.add(blob.name);
+    existingBlobNames.set(blob.name, blob.properties?.lastModified);
   }
 
   // Upload all local files
@@ -111,16 +114,20 @@ export async function uploadSpaToAzureStorage(
     existingBlobNames.delete(relativePath);
   }
 
-  // Delete stale blobs (files in bucket but not in local build)
+  // Blobs left out of this build: deleted once their last upload is more
+  // than a day old, so a visitor with the previous version open can still
+  // load its files
+  const now = new Date();
   let filesDeleted = 0;
-  for (const staleName of Array.from(existingBlobNames)) {
+  let filesKept = 0;
+  for (const [staleName, lastUploaded] of existingBlobNames) {
+    if (!shouldDeleteOldSpaFile(lastUploaded, now)) {
+      filesKept++;
+      continue;
+    }
     await containerClient.deleteBlob(staleName);
     filesDeleted++;
   }
 
-  if (filesDeleted > 0) {
-    runtime.logger.info(`  Deleted ${filesDeleted} stale files`);
-  }
-
-  return { filesUploaded, filesDeleted };
+  return { filesUploaded, filesDeleted, filesKept };
 }

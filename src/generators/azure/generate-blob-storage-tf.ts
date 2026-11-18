@@ -12,19 +12,26 @@
  */
 
 import type { AzureInfraConfig } from '../../types/config.ts';
+import { buildAzureResourceName } from '../../utils/azure/build-azure-resource-name.ts';
+import { buildAzureStorageContainerName } from '../../utils/azure/build-azure-storage-container-name.ts';
 
 export function generateBlobStorageTf(config: AzureInfraConfig): string {
   if (config.storageBuckets.length === 0) {
     return '';
   }
 
-  // Azure storage account name: alphanumeric only, max 24 chars
-  const sanitizedProject = config.projectName.replace(/[^a-z0-9]/g, '');
-  const storageAccountName = `${sanitizedProject}${config.environment}storage`;
+  // Azure storage account name: lowercase letters and digits, max 24 chars
+  const storageAccountName = buildAzureResourceName('blobStorageAccount', {
+    projectName: config.projectName,
+    environment: config.environment,
+    naming: config.naming,
+    subscriptionId: config.subscriptionId,
+  });
 
   const containerMap = config.storageBuckets
     .map(
-      (b) => `    "${b}" = "${config.projectName}-${b}-${config.environment}"`,
+      (b) =>
+        `    "${b}" = "${buildAzureStorageContainerName({ projectName: config.projectName, bucket: b, environment: config.environment })}"`,
     )
     .join('\n');
 

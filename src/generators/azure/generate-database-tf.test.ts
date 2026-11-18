@@ -9,8 +9,11 @@ const baseConfig: AzureInfraConfig = {
   subscriptionId: 'test-sub-id',
   location: 'eastus',
   storageAccountName: 'myprojectdevtfstate',
+  naming: 'legacy',
   keyVaultName: 'myproject-dev-kv',
   serviceKeyVaults: {},
+  dbJobsKeyVault: 'test-dev-dbjobs',
+  databaseServiceKeyVaults: {},
   database: {
     tier: 'B_Standard_B1ms',
     storageSizeGb: 32,
@@ -310,6 +313,57 @@ describe('generateDatabaseTf', () => {
       );
       expect(sslBlock).toContain(
         'server_id = azurerm_postgresql_flexible_server.main.id',
+      );
+    });
+  });
+
+  describe('saved databases', () => {
+    const block = (result: string, header: string): string => {
+      const start = result.indexOf(header);
+      return result.slice(start, result.indexOf('\n}\n', start) + 2);
+    };
+
+    it('should make a private storage account for the environment', () => {
+      const account = block(
+        generateDatabaseTf(baseConfig),
+        'resource "azurerm_storage_account" "db_exports"',
+      );
+      // New in every environment: the unique scheme, also in a legacy one
+      expect(account).toMatch(/name\s+= "myprojectdevdbx[a-z0-9]{6}"/);
+      expect(account).toContain('allow_nested_items_to_be_public = false');
+      expect(account).toContain('min_tls_version                 = "TLS1_2"');
+    });
+
+    it('should keep the files in one private container', () => {
+      const container = block(
+        generateDatabaseTf(baseConfig),
+        'resource "azurerm_storage_container" "db_exports"',
+      );
+      expect(container).toContain('name                  = "db-exports"');
+      expect(container).toContain('container_access_type = "private"');
+    });
+
+    it('should delete files after 7 days', () => {
+      const policy = block(
+        generateDatabaseTf(baseConfig),
+        'resource "azurerm_storage_management_policy" "db_exports"',
+      );
+      expect(policy).toContain(
+        'delete_after_days_since_creation_greater_than = 7',
+      );
+    });
+
+    it("should give the database jobs' identity the files", () => {
+      const grant = block(
+        generateDatabaseTf(baseConfig),
+        'resource "azurerm_role_assignment" "db_jobs_exports"',
+      );
+      expect(grant).toContain(
+        'scope                            = azurerm_storage_account.db_exports.id',
+      );
+      expect(grant).toContain('"Storage Blob Data Contributor"');
+      expect(grant).toContain(
+        'azurerm_user_assigned_identity.db_jobs.principal_id',
       );
     });
   });

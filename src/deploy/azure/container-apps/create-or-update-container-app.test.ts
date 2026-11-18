@@ -266,6 +266,31 @@ describe('createOrUpdateContainerApp', () => {
       expect(container.env).toContainEqual({ name: 'PORT', value: '3000' });
     });
 
+    it('should set DEPLOYED_AT to the deploy time, so every deploy starts a new revision', async () => {
+      mockBeginCreateOrUpdateAndWait.mockResolvedValue({
+        configuration: {},
+      });
+
+      const before = Date.now();
+      await createOrUpdateContainerApp(mockRuntime, {
+        credentials: testCredentials,
+        resourceGroupName: 'test-rg',
+        containerAppName: 'test-app',
+        containerAppsEnvId:
+          '/subscriptions/sub/resourceGroups/rg/providers/Microsoft.App/managedEnvironments/env',
+        image: 'myregistry.azurecr.io/myapp:latest',
+      });
+      const after = Date.now();
+
+      const container =
+        mockBeginCreateOrUpdateAndWait.mock.calls[0][2].template.containers[0];
+      const deployedAt = (
+        container.env as Array<{ name: string; value?: string }>
+      ).find((entry) => entry.name === 'DEPLOYED_AT')?.value;
+      expect(Date.parse(deployedAt ?? '')).toBeGreaterThanOrEqual(before);
+      expect(Date.parse(deployedAt ?? '')).toBeLessThanOrEqual(after);
+    });
+
     it('should scale an app without ingress (a worker) on CPU', async () => {
       mockBeginCreateOrUpdateAndWait.mockResolvedValue({
         configuration: {},

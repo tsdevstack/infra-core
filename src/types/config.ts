@@ -10,6 +10,11 @@
  * the provider extension interfaces.
  */
 
+import type { NAMING_SCHEMES } from '../constants/resource-naming.ts';
+
+/** How an environment names its resources (see constants/resource-naming.ts) */
+export type NamingScheme = (typeof NAMING_SCHEMES)[number];
+
 // ---------------------------------------------------------------------------
 // Sub-types — shared across all providers
 // ---------------------------------------------------------------------------
@@ -350,10 +355,19 @@ export interface AzureInfraConfig extends BaseInfraConfig {
   nextjsScaling: AppServicePlanScaling;
   /** Skip custom domain associations in routes and security policy (for two-phase deploy recovery) */
   skipCustomDomainAssociations?: boolean;
+  /** How the environment names its resources (whether its shared Key Vault has the old name) */
+  naming: NamingScheme;
   /** The shared Key Vault (created by cloud:init) */
   keyVaultName: string;
   /** Each backend service's own Key Vault, by service name (created by the CLI) */
   serviceKeyVaults: Record<string, string>;
+  /**
+   * The database jobs' Key Vault (created by the CLI): the server admin's
+   * password and each service's MIGRATION_DATABASE_URL
+   */
+  dbJobsKeyVault: string;
+  /** The own Key Vault of each service with a database, by service name */
+  databaseServiceKeyVaults: Record<string, string>;
 }
 
 export interface AWSInfraConfig extends BaseInfraConfig {
@@ -369,6 +383,8 @@ export interface GCPInfraConfig extends BaseInfraConfig {
   gcpProjectId: string;
   region: string;
   stateBucket: string;
+  /** How the environment names its resources (read from its Terraform state) */
+  naming: NamingScheme;
 }
 
 /**

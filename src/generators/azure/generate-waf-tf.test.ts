@@ -12,8 +12,11 @@ function makeConfig(
     subscriptionId: 'sub-123',
     location: 'eastus2',
     storageAccountName: 'testprojectdevtfstate',
+    naming: 'legacy',
     keyVaultName: 'myproject-dev-kv',
     serviceKeyVaults: {},
+    dbJobsKeyVault: 'test-dev-dbjobs',
+    databaseServiceKeyVaults: {},
     database: {
       tier: 'B_Standard_B1ms',
       storageSizeGb: 32,

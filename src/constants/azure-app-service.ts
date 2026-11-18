@@ -21,6 +21,19 @@ export const AZURE_APP_SERVICE_AUTOSCALE = {
 } as const;
 
 /**
+ * Container logging on Kong and the Next.js apps: App Service writes each
+ * container's output (Kong's collector sidecar too) to /home/LogFiles, on
+ * the plan's own storage at no extra cost. Kudu's log stream sends what is
+ * written there; without it the stream stays empty. Azure CLI's
+ * `az webapp log config --docker-container-logging filesystem` sets the same
+ * limits.
+ */
+export const AZURE_APP_SERVICE_CONTAINER_LOGS = {
+  retentionDays: 3,
+  retentionMb: 100,
+} as const;
+
+/**
  * App Service health check for plans with more than one instance (or
  * autoscale): a failing instance leaves the load balancer after this many
  * failed pings, one per minute (2 to 10). App Service never removes the

@@ -10,6 +10,7 @@ describe('generateMainTf', () => {
     gcpProjectId: 'gcp-project-123',
     region: 'us-central1',
     stateBucket: 'my-app-tf-state',
+    naming: 'legacy',
     baseDomain: 'example.com',
     database: {
       tier: 'db-f1-micro',
@@ -90,6 +91,13 @@ describe('generateMainTf', () => {
     });
   });
 
+  describe('providers', () => {
+    it('should declare the random provider (the database admin password)', () => {
+      const result = generateMainTf(baseConfig);
+      expect(result).toContain('source  = "hashicorp/random"');
+    });
+  });
+
   describe('snapshot', () => {
     it('should match snapshot for dev environment', () => {
       const result = generateMainTf(baseConfig);
@@ -101,6 +109,7 @@ describe('generateMainTf', () => {
         ...baseConfig,
         environment: 'prod',
         stateBucket: 'production-app-tf-state',
+        naming: 'legacy',
       };
       const result = generateMainTf(prodConfig);
       expect(result).toMatchSnapshot();

@@ -65,6 +65,17 @@ variable "service_key_vaults" {
   default     = {}
 }
 
+variable "db_jobs_key_vault" {
+  description = "The database jobs' Key Vault (created by the CLI): admin password, MIGRATION_DATABASE_URL"
+  type        = string
+}
+
+variable "database_service_key_vaults" {
+  description = "The own Key Vault of each service with a database, by service name"
+  type        = map(string)
+  default     = {}
+}
+
 # =============================================================================
 # Domain
 # =============================================================================

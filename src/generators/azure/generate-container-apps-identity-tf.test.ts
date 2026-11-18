@@ -131,4 +131,40 @@ describe('generateContainerAppsIdentityTf', () => {
       expect(sharedGrants.join('')).not.toContain('Microsoft.KeyVault/vaults/');
     });
   });
+
+  describe('Database jobs identity', () => {
+    const dbJobs = result.slice(result.indexOf('# Database jobs identity'));
+
+    it('should create its own identity', () => {
+      expect(dbJobs).toContain(
+        'resource "azurerm_user_assigned_identity" "db_jobs"',
+      );
+      expect(dbJobs).toContain(
+        'name                = "${var.project_name}-${var.environment}-db-jobs"',
+      );
+    });
+
+    it('should pull its image from the registry', () => {
+      expect(dbJobs).toContain(
+        'resource "azurerm_role_assignment" "db_jobs_acr_pull"',
+      );
+      expect(dbJobs).toContain('role_definition_name             = "AcrPull"');
+    });
+
+    it("should write secrets in the database jobs' vault and each database service's vault", () => {
+      expect(dbJobs).toContain(
+        'scope                            = "${data.azurerm_resource_group.main.id}/providers/Microsoft.KeyVault/vaults/${var.db_jobs_key_vault}"',
+      );
+      expect(dbJobs).toContain('for_each = var.database_service_key_vaults');
+      expect(dbJobs.match(/Key Vault Secrets Officer/g)).toHaveLength(2);
+    });
+
+    it("should keep every service identity out of the database jobs' vault", () => {
+      const before = result.slice(
+        0,
+        result.indexOf('# Database jobs identity'),
+      );
+      expect(before).not.toContain('db_jobs_key_vault');
+    });
+  });
 });

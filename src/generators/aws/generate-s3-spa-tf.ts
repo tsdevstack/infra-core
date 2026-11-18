@@ -6,11 +6,13 @@
  * - Public access block
  * - CloudFront Origin Access Control
  * - CloudFront distribution with WAF protection
- * - S3 bucket policy (CloudFront access only)
+ * - S3 bucket policy (CloudFront access only, requests without HTTPS refused)
  *
  * SPA routing: 404 errors return index.html for client-side routing.
  * WAF provides edge protection (CLOUDFRONT scope, us-east-1).
  */
+
+import { buildDenyInsecureTransportStatement } from '../../utils/aws/build-deny-insecure-transport-statement.ts';
 
 export function generateS3SpaTf(): string {
   return `# S3 + CloudFront for SPAs
@@ -129,20 +131,23 @@ resource "aws_s3_bucket_policy" "spa" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid    = "AllowCloudFrontAccess"
-      Effect = "Allow"
-      Principal = {
-        Service = "cloudfront.amazonaws.com"
-      }
-      Action   = "s3:GetObject"
-      Resource = "\${aws_s3_bucket.spa[each.key].arn}/*"
-      Condition = {
-        StringEquals = {
-          "AWS:SourceArn" = aws_cloudfront_distribution.spa[each.key].arn
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontAccess"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
         }
-      }
-    }]
+        Action   = "s3:GetObject"
+        Resource = "\${aws_s3_bucket.spa[each.key].arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.spa[each.key].arn
+          }
+        }
+      },
+${buildDenyInsecureTransportStatement('aws_s3_bucket.spa[each.key].arn', '      ')}
+    ]
   })
 }
 

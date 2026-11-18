@@ -8,10 +8,18 @@
  * Services always run at least one task on AWS, so no wake-up step is needed.
  *
  * This Lambda runs in VPC to resolve CloudMap DNS names.
- * EventBridge Scheduler triggers it with { serviceName, path, jobName }.
+ * EventBridge Scheduler triggers it with { serviceName, path, jobName, method,
+ * timeoutSeconds }: the job's HTTP method and how long to wait (httpTimeout).
+ * The function's own timeout is a few seconds longer than the longest job's,
+ * so a run that times out still logs its end.
  * Every line it writes starts with job=<name>, so each job's runs can be
  * read on their own (infra:logs).
  */
+
+import {
+  DEFAULT_SCHEDULED_JOB_METHOD,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
+} from '../../constants/index.ts';
 
 export function generateJobInvokerLambdaCode(): string {
   return `// Job Invoker Lambda for scheduled jobs
@@ -25,7 +33,14 @@ const NAMESPACE = process.env.CLOUDMAP_NAMESPACE;
 const JOB_SECRET_ARN = process.env.JOB_SECRET_ARN;
 
 exports.handler = async (event) => {
-  const { serviceName, path, jobName } = event;
+  // Defaults for events from schedules made before method and timeoutSeconds
+  const {
+    serviceName,
+    path,
+    jobName,
+    method = '${DEFAULT_SCHEDULED_JOB_METHOD}',
+    timeoutSeconds = ${SCHEDULED_JOB_HTTP_TIMEOUT.aws.default},
+  } = event;
 
   // Every line starts with job=<name>: infra:logs reads a job's runs by it
   const job = jobName || \`\${serviceName}\${path}\`;
@@ -53,17 +68,17 @@ exports.handler = async (event) => {
 
     // Build URL using CloudMap DNS
     const url = \`http://\${serviceName}.\${NAMESPACE}:8080\${path}\`;
-    log(\`Run started: POST \${url}\`);
+    log(\`Run started: \${method} \${url}\`);
 
     // Make HTTP request to service
     const response = await fetch(url, {
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
         'X-Job-Secret': SecretString,
       },
-      // Below the function's 300 s timeout, so a hung job still logs its end
-      signal: AbortSignal.timeout(290000),
+      // The function runs a few seconds longer, so a hung job still logs its end
+      signal: AbortSignal.timeout(timeoutSeconds * 1000),
     });
 
     const responseText = await response.text();

@@ -13,7 +13,11 @@
  * Job authentication uses X-Job-Secret header (vs OIDC token on GCP).
  */
 
-import { AWS_LAMBDA_NODE_RUNTIME } from '../../constants/index.ts';
+import {
+  AWS_LAMBDA_NODE_RUNTIME,
+  AWS_JOB_INVOKER_LOG_SECONDS,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
+} from '../../constants/index.ts';
 
 export function generateEventbridgeTf(): string {
   return `# EventBridge Scheduled Jobs
@@ -79,9 +83,14 @@ resource "aws_lambda_function" "job_invoker" {
   function_name = "\${var.project_name}-job-invoker"
   runtime       = "${AWS_LAMBDA_NODE_RUNTIME}"
   handler       = "index.handler"
-  timeout       = 300
   memory_size   = 256
   role          = aws_iam_role.job_invoker_lambda.arn
+
+  # One invoker runs every job: it lives as long as the longest job waits
+  # (httpTimeout), plus the seconds it needs to log that run's end
+  timeout = max(${SCHEDULED_JOB_HTTP_TIMEOUT.aws.default}, [
+    for job in values(var.scheduled_jobs) : job.timeoutSeconds
+  ]...) + ${AWS_JOB_INVOKER_LOG_SECONDS}
 
   depends_on = [aws_cloudwatch_log_group.job_invoker]
 
@@ -199,7 +208,8 @@ resource "aws_scheduler_schedule" "job" {
   name       = "\${var.project_name}-\${each.key}"
   group_name = "default"
 
-  schedule_expression = each.value.schedule
+  schedule_expression          = each.value.schedule
+  schedule_expression_timezone = each.value.timezone
 
   flexible_time_window {
     mode = "OFF"
@@ -210,9 +220,11 @@ resource "aws_scheduler_schedule" "job" {
     role_arn = aws_iam_role.eventbridge_scheduler.arn
 
     input = jsonencode({
-      serviceName = each.value.serviceName
-      path        = each.value.path
-      jobName     = each.key
+      serviceName    = each.value.serviceName
+      path           = each.value.path
+      jobName        = each.key
+      method         = each.value.method
+      timeoutSeconds = each.value.timeoutSeconds
     })
 
     retry_policy {

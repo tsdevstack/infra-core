@@ -120,6 +120,11 @@ output "db_init_ecr_url" {
   value       = aws_ecr_repository.db_init.repository_url
 }
 
+output "db_exports_bucket" {
+  description = "Bucket of the saved databases (infra:remove-service, infra:restore-database)"
+  value       = aws_s3_bucket.db_exports.bucket
+}
+
 # =============================================================================
 # DB-Delete (database deletion task)
 # =============================================================================

@@ -10,6 +10,7 @@ describe('generateTfvars', () => {
     gcpProjectId: 'gcp-project-123',
     region: 'us-central1',
     stateBucket: 'my-app-tf-state',
+    naming: 'legacy',
     baseDomain: 'example.com',
     database: {
       tier: 'db-f1-micro',
@@ -133,6 +134,7 @@ describe('generateTfvars', () => {
         gcpProjectId: 'prod-gcp-12345',
         region: 'europe-west1',
         stateBucket: 'production-app-tf-state',
+        naming: 'legacy',
         database: {
           tier: 'db-custom-8-32768',
           storageSizeGb: 1000,
@@ -179,6 +181,7 @@ describe('generateTfvars', () => {
         gcpProjectId: 'my-app-prod-123',
         region: 'us-east1',
         stateBucket: 'my-app-tf-state',
+        naming: 'legacy',
         database: {
           tier: 'db-custom-2-8192',
           storageSizeGb: 100,

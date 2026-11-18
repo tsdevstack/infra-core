@@ -48,6 +48,13 @@ output "project_number" {
   value       = data.google_project.current.number
 }
 
+# Read by every command to name Cloud Run services, jobs and buckets the way
+# this environment was first deployed (never changes once deployed)
+output "naming_scheme" {
+  description = "How this environment names its resources (legacy or unique)"
+  value       = "legacy"
+}
+
 # ─────────────────────────────────────────
 # Database (Cloud SQL)
 # ─────────────────────────────────────────
@@ -65,6 +72,26 @@ output "database_connection_name" {
 output "database_private_ip" {
   description = "Private IP address of the Cloud SQL instance"
   value       = google_sql_database_instance.postgres.private_ip_address
+}
+
+output "db_admin_password_secret" {
+  description = "Secret Manager secret with the postgres user's password (db-init)"
+  value       = google_secret_manager_secret.db_admin_password.secret_id
+}
+
+output "db_jobs_service_account_email" {
+  description = "Service account of db-init"
+  value       = google_service_account.db_jobs.email
+}
+
+output "db_exports_bucket" {
+  description = "Bucket of the saved databases (infra:remove-service, infra:restore-database)"
+  value       = google_storage_bucket.db_exports.name
+}
+
+output "migration_service_account_emails" {
+  description = "Each database service's migration account (service name -> email)"
+  value       = { for k, v in google_service_account.migrate : k => v.email }
 }
 
 # ─────────────────────────────────────────

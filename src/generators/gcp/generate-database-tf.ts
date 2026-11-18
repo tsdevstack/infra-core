@@ -5,14 +5,22 @@
 import type { GCPInfraConfig } from '../../types/index.ts';
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
 import { toTfVarSuffix } from '../../utils/terraform/to-tf-var-suffix.ts';
+import {
+  DB_EXPORT_RETENTION_DAYS,
+  DB_SERVER_POSTGRES_VERSION,
+} from '../../constants/database-export.ts';
 
 /**
  * Generate database.tf content
  *
  * Creates:
- * - Cloud SQL PostgreSQL instance
+ * - Cloud SQL PostgreSQL instance; its built-in postgres user (a member of
+ *   cloudsqlsuperuser) gets a generated password, kept in Secret Manager,
+ *   for db-init
  * - One database per service with hasDatabase=true
- * - One database user per service with password from Secret Manager
+ * - One database user per service with password from Secret Manager (the
+ *   owner role; db-init takes away what Cloud SQL gives it and adds the app
+ *   role)
  */
 export function generateDatabaseTf(config: GCPInfraConfig): string {
   const servicesWithDb = config.servicesWithDatabase.filter(
@@ -24,9 +32,14 @@ export function generateDatabaseTf(config: GCPInfraConfig): string {
     .map(
       (service) => `
 # Database for ${service.name}
+# ABANDON: Terraform drops it from its state instead of deleting it. Cloud
+# SQL's API refuses to delete a database owned by a role outside its admin
+# group, and db-init gives it to the service's owner. Destroy deletes the
+# instance, which removes it; remove-service drops it in SQL (db-init).
 resource "google_sql_database" "${toTerraformId(service.name)}" {
-  name     = "${service.name}"
-  instance = google_sql_database_instance.postgres.name
+  name            = "${service.name}"
+  instance        = google_sql_database_instance.postgres.name
+  deletion_policy = "ABANDON"
 }`,
     )
     .join('\n');
@@ -57,11 +70,14 @@ resource "google_sql_user" "${tfId}_user" {
 # 1. Cloud SQL PostgreSQL Instance
 resource "google_sql_database_instance" "postgres" {
   name             = "\${var.project_name}-postgres"
-  database_version = "POSTGRES_15"
+  database_version = "POSTGRES_${DB_SERVER_POSTGRES_VERSION.gcp}"
   region           = var.gcp_region
 
   # Prevent accidental deletion
   deletion_protection = var.database_deletion_protection
+
+  # The postgres user's password: db-init logs in with it
+  root_password = random_password.db_admin.result
 
   settings {
     tier              = var.database_tier
@@ -104,10 +120,83 @@ resource "google_sql_database_instance" "postgres" {
 }
 ${databaseResources}
 
-# 2. Database Users (one per service)
+# 2. Admin login for db-init: Cloud SQL's built-in postgres user. db-init (a
+# Cloud Run job in the VPC) reads the password from Secret Manager, creates
+# each service's app role and takes away the rights Cloud SQL gives every
+# user it creates (cloudsqlsuperuser, CREATEROLE, CREATEDB).
+resource "random_password" "db_admin" {
+  length  = 32
+  special = false
+}
+
+resource "google_secret_manager_secret" "db_admin_password" {
+  secret_id = "\${var.project_name}-db-admin-password"
+
+  replication {
+    auto {}
+  }
+
+  labels = {
+    "project-name" = var.project_name
+    "managed-by"   = "tsdevstack"
+    "secret-type"  = "database-admin"
+  }
+}
+
+resource "google_secret_manager_secret_version" "db_admin_password" {
+  secret      = google_secret_manager_secret.db_admin_password.id
+  secret_data = random_password.db_admin.result
+}
+
+# 3. Database Users (one per service: the owner role)
 # Passwords are passed via TF_VAR_db_{prefix}_password
 # - CI: Read from environment variables (DB_AUTH_PASSWORD, etc.)
 # - Local: Fetched from Secret Manager via cloud-secrets:get
 ${userResources}
+
+# 4. Saved databases: infra:remove-service saves a service's database here
+# before it drops it, and infra:restore-database saves the current contents
+# before it replaces them ({service}/{time}-{reason}.dump). One bucket for the
+# environment: a bucket per service would go with the service at the next
+# deploy, and its file with it. Files are deleted after
+# ${DB_EXPORT_RETENTION_DAYS} days, with no soft delete; destroy deletes the
+# bucket and its files.
+resource "google_storage_bucket" "db_exports" {
+  name          = "\${var.project_name}-db-exports-\${var.gcp_project_id}"
+  location      = var.gcp_region
+  project       = var.gcp_project_id
+  force_destroy = true
+
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+
+  lifecycle_rule {
+    condition {
+      age = ${DB_EXPORT_RETENTION_DAYS}
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  soft_delete_policy {
+    retention_duration_seconds = 0
+  }
+}
+
+# Only db-init (the db-jobs account) writes and reads the files: it can't
+# delete or replace them. The deploy account lists them (the check before a
+# removal, the choice of file for a restore).
+resource "google_storage_bucket_iam_member" "db_exports_create" {
+  bucket = google_storage_bucket.db_exports.name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:\${google_service_account.db_jobs.email}"
+}
+
+resource "google_storage_bucket_iam_member" "db_exports_read" {
+  bucket = google_storage_bucket.db_exports.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:\${google_service_account.db_jobs.email}"
+}
 `;
 }

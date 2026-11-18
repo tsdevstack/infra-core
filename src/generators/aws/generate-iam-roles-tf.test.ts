@@ -42,6 +42,13 @@ describe('generateIamRolesTf', () => {
       );
     });
 
+    it("should allow each service's MIGRATION_DATABASE_URL, for the migration tasks", () => {
+      const result = generateIamRolesTf();
+      expect(result).toContain(
+        '[for name in keys(var.services) : "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.project_name}-${name}-MIGRATION_DATABASE_URL-??????" if name != "kong"]',
+      );
+    });
+
     it('should not allow every secret of the project', () => {
       const result = generateIamRolesTf();
       expect(result).not.toContain('secret:${var.project_name}-*"');
@@ -104,6 +111,18 @@ describe('generateIamRolesTf', () => {
     it('should allow access to service-specific secrets', () => {
       const result = generateIamRolesTf();
       expect(result).toContain('${var.project_name}-${each.key}-*');
+    });
+
+    it("should deny the running service its owner role's URL", () => {
+      const result = generateIamRolesTf();
+      const policy = result.slice(
+        result.indexOf('resource "aws_iam_role_policy" "task_secrets"'),
+        result.indexOf('resource "aws_iam_role_policy" "task_traces"'),
+      );
+      expect(policy).toContain('Effect   = "Deny"');
+      expect(policy).toContain(
+        'Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${var.project_name}-${each.key}-MIGRATION_DATABASE_URL-??????"]',
+      );
     });
   });
 

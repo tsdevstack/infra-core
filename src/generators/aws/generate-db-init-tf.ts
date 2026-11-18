@@ -64,7 +64,8 @@ resource "aws_cloudwatch_log_group" "db_init" {
 
 # =============================================================================
 # IAM Role for db-init Task
-# Needs: read master password, create/write per-service DATABASE_URL secrets
+# Needs: read master password, create/write per-service DATABASE_URL and
+# MIGRATION_DATABASE_URL secrets
 # =============================================================================
 
 resource "aws_iam_role" "db_init_task" {
@@ -107,7 +108,8 @@ resource "aws_iam_role_policy" "db_init_secrets" {
           "secretsmanager:TagResource"
         ]
         Resource = [
-          "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-*-DATABASE_URL*"
+          "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-*-DATABASE_URL*",
+          "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-*-MIGRATION_DATABASE_URL*"
         ]
       }
     ]

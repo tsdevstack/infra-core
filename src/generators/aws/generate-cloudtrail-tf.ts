@@ -2,15 +2,19 @@
  * Generate cloudtrail.tf for AWS CloudTrail audit logging
  *
  * Creates:
- * - S3 bucket for CloudTrail log storage (encrypted, versioned)
+ * - S3 bucket for CloudTrail log storage (encrypted, versioned, requests
+ *   without HTTPS refused)
  * - KMS key for CloudTrail encryption
  * - CloudTrail trail with all management events
+ * - The bucket also takes the storage buckets' access trail (storage.tf)
  *
  * CloudTrail provides API-level audit trail required for:
  * - SOC 2 CC7.1: Detect and respond to anomalies
  * - GDPR Art. 32: Accountability audit trail
  * - ISO 27001 A.12.4.1: Event logging
  */
+
+import { buildDenyInsecureTransportStatement } from '../../utils/aws/build-deny-insecure-transport-statement.ts';
 
 export function generateCloudtrailTf(): string {
   return `# CloudTrail Audit Logging
@@ -83,6 +87,15 @@ resource "aws_kms_alias" "cloudtrail" {
 # S3 Bucket for CloudTrail Logs
 # =============================================================================
 
+# The trails that write here: this file's, and the storage buckets' access
+# trail (storage.tf, only with buckets)
+locals {
+  cloudtrail_trail_arns = [
+    "arn:aws:cloudtrail:\${var.aws_region}:\${data.aws_caller_identity.current.account_id}:trail/\${var.project_name}-trail",
+    "arn:aws:cloudtrail:\${var.aws_region}:\${data.aws_caller_identity.current.account_id}:trail/\${var.project_name}-storage-trail",
+  ]
+}
+
 resource "aws_s3_bucket" "cloudtrail" {
   bucket        = "\${var.project_name}-cloudtrail-\${data.aws_caller_identity.current.account_id}"
   force_destroy = true
@@ -153,7 +166,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = aws_s3_bucket.cloudtrail.arn
         Condition = {
           StringEquals = {
-            "AWS:SourceArn" = "arn:aws:cloudtrail:\${var.aws_region}:\${data.aws_caller_identity.current.account_id}:trail/\${var.project_name}-trail"
+            "AWS:SourceArn" = local.cloudtrail_trail_arns
           }
         }
       },
@@ -168,10 +181,11 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"  = "bucket-owner-full-control"
-            "AWS:SourceArn" = "arn:aws:cloudtrail:\${var.aws_region}:\${data.aws_caller_identity.current.account_id}:trail/\${var.project_name}-trail"
+            "AWS:SourceArn" = local.cloudtrail_trail_arns
           }
         }
-      }
+      },
+${buildDenyInsecureTransportStatement('aws_s3_bucket.cloudtrail.arn', '      ')}
     ]
   })
 }

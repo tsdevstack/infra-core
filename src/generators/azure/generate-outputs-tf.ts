@@ -183,6 +183,26 @@ output "service_secrets_identities" {
   }
 }
 
+output "db_jobs_identity_id" {
+  description = "The database jobs' identity (db-init): resource ID"
+  value       = azurerm_user_assigned_identity.db_jobs.id
+}
+
+output "db_jobs_identity_client_id" {
+  description = "The database jobs' identity: client ID (AZURE_CLIENT_ID in db-init)"
+  value       = azurerm_user_assigned_identity.db_jobs.client_id
+}
+
+output "db_exports_storage_account" {
+  description = "Storage account of the saved databases (infra:remove-service, infra:restore-database)"
+  value       = azurerm_storage_account.db_exports.name
+}
+
+output "db_exports_container_url" {
+  description = "Container of the saved databases (EXPORT_CONTAINER_URL in db-init)"
+  value       = "\${azurerm_storage_account.db_exports.primary_blob_endpoint}\${azurerm_storage_container.db_exports.name}"
+}
+
 # =============================================================================
 # Redis (Azure Managed Redis)
 # =============================================================================

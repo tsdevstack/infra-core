@@ -12,6 +12,7 @@ import { InfraCoreError } from '../../runtime/infra-core-error.ts';
 import { buildGCPClientOptions } from '../../utils/gcp/build-gcp-client-options.ts';
 import { sleep } from '../../utils/async/sleep.ts';
 import { fetchJobLogs } from './fetch-cloud-run-logs.ts';
+import { CLOUD_RUN_NO_ANSWER_GRPC_CODES } from '../../constants/cloud-run-deploy-wait.ts';
 
 export interface CloudRunJobOptions {
   projectId: string;
@@ -22,13 +23,23 @@ export interface CloudRunJobOptions {
   // Direct VPC Egress - job gets IP directly in subnet
   vpcNetwork: string; // e.g., "projects/xxx/global/networks/tsdevstack-vpc"
   vpcSubnet: string; // e.g., "projects/xxx/regions/us-central1/subnetworks/tsdevstack-subnet"
-  secretName: string;
+  /** Secret set as DATABASE_URL (the migration jobs) */
+  secretName?: string;
+  /** More environment variables from secrets: name -> secret id */
+  secretEnv?: Record<string, string>;
+  /** Plain environment variables */
+  env?: Record<string, string>;
   serviceAccount: string;
   credentials: GCPCredentials;
   /** CPU allocation (default: '1') */
   cpu?: string;
   /** Memory allocation (default: '2Gi') */
   memory?: string;
+  /**
+   * Time limit of the job's task, in seconds (default 300). The CLI waits
+   * that long plus 2 minutes for the job to start.
+   */
+  timeoutSeconds?: number;
 }
 
 export interface CloudRunJobResult {
@@ -49,6 +60,7 @@ export async function executeCloudRunJob(
 
   const parent = `projects/${options.projectId}/locations/${options.region}`;
   const jobName = `${parent}/jobs/${options.jobName}`;
+  const timeoutSeconds = options.timeoutSeconds ?? 300;
 
   // Job configuration
   const jobConfig = {
@@ -61,16 +73,25 @@ export async function executeCloudRunJob(
             image: options.imageUri,
             command: options.command,
             env: [
-              {
-                name: 'DATABASE_URL',
+              ...Object.entries({
+                ...(options.secretName
+                  ? { DATABASE_URL: options.secretName }
+                  : {}),
+                ...options.secretEnv,
+              }).map(([name, secret]) => ({
+                name,
                 valueSource: {
                   secretKeyRef: {
                     // Secret name - Cloud Run resolves it within the same project
-                    secret: options.secretName,
+                    secret,
                     version: 'latest',
                   },
                 },
-              },
+              })),
+              ...Object.entries(options.env ?? {}).map(([name, value]) => ({
+                name,
+                value,
+              })),
             ],
             resources: {
               limits: {
@@ -90,7 +111,7 @@ export async function executeCloudRunJob(
           egress: 'PRIVATE_RANGES_ONLY' as const,
         },
         maxRetries: 0,
-        timeout: { seconds: 300 },
+        timeout: { seconds: timeoutSeconds },
       },
     },
   };
@@ -193,7 +214,7 @@ export async function executeCloudRunJob(
 
   // Poll for completion
   runtime.logger.info('Waiting for job to complete...');
-  const maxWaitTime = 5 * 60 * 1000; // 5 minutes
+  const maxWaitTime = (timeoutSeconds + 120) * 1000;
   const pollInterval = 5000; // 5 seconds
   const startTime = Date.now();
 
@@ -234,6 +255,15 @@ export async function executeCloudRunJob(
 
       await sleep(pollInterval);
     } catch (error) {
+      // A status check with no answer: the job carries on at Google
+      const code = (error as { code?: unknown } | null)?.code;
+      if (
+        typeof code === 'number' &&
+        CLOUD_RUN_NO_ANSWER_GRPC_CODES.includes(code)
+      ) {
+        await sleep(pollInterval);
+        continue;
+      }
       throw new InfraCoreError(
         `Failed to check execution status`,
         'cloud-run-jobs',

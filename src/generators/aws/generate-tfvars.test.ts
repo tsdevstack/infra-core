@@ -237,9 +237,46 @@ describe('generateTfvars', () => {
       };
       const result = generateTfvars(config);
       expect(result).toContain('"auth-service-cleanup" = {');
-      expect(result).toContain('schedule    = "cron(0 * * * ? *)"');
-      expect(result).toContain('serviceName = "auth-service"');
-      expect(result).toContain('path        = "/api/internal/cleanup"');
+      expect(result).toContain('schedule       = "cron(0 * * * ? *)"');
+      expect(result).toContain('serviceName    = "auth-service"');
+      expect(result).toContain('path           = "/api/internal/cleanup"');
+    });
+
+    it('should give a job without method or httpTimeout POST and 300 s', () => {
+      const result = generateTfvars({
+        ...baseConfig,
+        scheduledJobs: {
+          'auth-service-cleanup': {
+            name: 'auth-service-cleanup',
+            schedule: 'cron(0 * * * ? *)',
+            targetService: 'auth-service',
+            endpoint: '/api/internal/cleanup',
+          },
+        },
+      });
+      expect(result).toContain('method         = "POST"');
+      expect(result).toContain('timeoutSeconds = 300');
+      expect(result).toContain('timezone       = "UTC"');
+    });
+
+    it("should pass the job's own method and httpTimeout", () => {
+      const result = generateTfvars({
+        ...baseConfig,
+        scheduledJobs: {
+          'reports-service-generate': {
+            name: 'reports-service-generate',
+            schedule: 'cron(0 9 * * ? *)',
+            targetService: 'reports-service',
+            endpoint: '/jobs/generate',
+            method: 'GET',
+            httpTimeout: 600,
+            timezone: 'Europe/Budapest',
+          },
+        },
+      });
+      expect(result).toContain('method         = "GET"');
+      expect(result).toContain('timeoutSeconds = 600');
+      expect(result).toContain('timezone       = "Europe/Budapest"');
     });
   });
 

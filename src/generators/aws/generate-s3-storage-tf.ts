@@ -4,16 +4,21 @@
  * Creates:
  * - S3 buckets with for_each over configured bucket names
  * - Public access block (all blocked — presigned URLs are the security boundary)
+ * - Bucket policy refusing requests without HTTPS
  * - CORS configuration (allow all origins — presigned URLs control access)
  * - Versioning enabled
  * - Lifecycle configuration (expire non-current versions after 7 days)
  * - IAM policy on the service task roles for S3 access (not Kong's)
+ * - Access logs of their objects: a CloudTrail trail of data events into
+ *   CloudWatch Logs
  *
  * force_destroy = true allows Terraform to delete non-empty buckets.
  * WARNING: This is permanent — all objects and versions are deleted, NOT recoverable.
  */
 
 import type { AWSInfraConfig } from '../../types/config.ts';
+import { buildS3StorageBucketName } from '../../utils/aws/build-s3-storage-bucket-name.ts';
+import { buildDenyInsecureTransportStatement } from '../../utils/aws/build-deny-insecure-transport-statement.ts';
 
 export function generateS3StorageTf(config: AWSInfraConfig): string {
   if (config.storageBuckets.length === 0) {
@@ -23,7 +28,12 @@ export function generateS3StorageTf(config: AWSInfraConfig): string {
   const bucketMap = config.storageBuckets
     .map(
       (b) =>
-        `    "${b}" = "${config.projectName}-${b}-${config.environment}-${config.accountId}"`,
+        `    "${b}" = "${buildS3StorageBucketName({
+          projectName: config.projectName,
+          bucket: b,
+          environment: config.environment,
+          accountId: config.accountId,
+        })}"`,
     )
     .join('\n');
 
@@ -63,6 +73,25 @@ resource "aws_s3_bucket_public_access_block" "storage" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+# =============================================================================
+# Bucket Policy — requests without HTTPS refused
+# =============================================================================
+
+resource "aws_s3_bucket_policy" "storage" {
+  for_each = local.storage_buckets
+
+  depends_on = [aws_s3_bucket_public_access_block.storage]
+
+  bucket = aws_s3_bucket.storage[each.key].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+${buildDenyInsecureTransportStatement('aws_s3_bucket.storage[each.key].arn', '      ')}
+    ]
+  })
 }
 
 # =============================================================================
@@ -150,6 +179,81 @@ resource "aws_iam_role_policy" "task_s3_storage" {
       ])
     }]
   })
+}
+
+# =============================================================================
+# Access logs: every read and write of the storage buckets' objects
+# CloudTrail data events, from a trail of their own (only data events, so
+# account events are not paid twice), into CloudWatch Logs (infra:logs
+# bucket-{name}). CloudTrail also needs an S3 copy: the CloudTrail bucket
+# (cloudtrail.tf), with its key.
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "storage_access" {
+  name              = "/aws/cloudtrail/\${var.project_name}-storage-access"
+  retention_in_days = 30
+}
+
+resource "aws_iam_role" "storage_access_trail" {
+  name = "\${var.project_name}-storage-trail-logs"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "storage_access_trail" {
+  name = "write-storage-access-logs"
+  role = aws_iam_role.storage_access_trail.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+      Resource = "\${aws_cloudwatch_log_group.storage_access.arn}:*"
+    }]
+  })
+}
+
+resource "aws_cloudtrail" "storage_access" {
+  name                          = "\${var.project_name}-storage-trail"
+  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  kms_key_id                    = aws_kms_key.cloudtrail.arn
+  cloud_watch_logs_group_arn    = "\${aws_cloudwatch_log_group.storage_access.arn}:*"
+  cloud_watch_logs_role_arn     = aws_iam_role.storage_access_trail.arn
+  include_global_service_events = false
+  is_multi_region_trail         = false
+  enable_log_file_validation    = true
+
+  advanced_event_selector {
+    name = "Storage bucket objects"
+
+    field_selector {
+      field  = "eventCategory"
+      equals = ["Data"]
+    }
+
+    field_selector {
+      field  = "resources.type"
+      equals = ["AWS::S3::Object"]
+    }
+
+    field_selector {
+      field       = "resources.ARN"
+      starts_with = [for bucket in aws_s3_bucket.storage : "\${bucket.arn}/"]
+    }
+  }
+
+  depends_on = [
+    aws_s3_bucket_policy.cloudtrail,
+    aws_iam_role_policy.storage_access_trail,
+  ]
 }
 
 # =============================================================================

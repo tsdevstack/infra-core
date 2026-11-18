@@ -81,9 +81,12 @@ nextjs_services = {
 # Scheduled Jobs
 scheduled_jobs = {
   "auth-service-cleanup" = {
-    schedule    = "cron(0 * * * ? *)"
-    serviceName = "auth-service"
-    path        = "/api/internal/cleanup"
+    schedule       = "cron(0 * * * ? *)"
+    serviceName    = "auth-service"
+    path           = "/api/internal/cleanup"
+    method         = "POST"
+    timeoutSeconds = 300
+    timezone       = "UTC"
   }
 }
 

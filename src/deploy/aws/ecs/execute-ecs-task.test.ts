@@ -67,6 +67,8 @@ const options = {
   region: 'us-east-1',
   clusterName: 'test-cluster',
   taskName: 'migrate-offers-service',
+  taskFamily: 'myapp-migrate-offers-service',
+  logGroupName: '/ecs/myapp/migrate-offers-service',
   imageUri: '123456789012.dkr.ecr.us-east-1.amazonaws.com/app:tag',
   command: ['npx', 'prisma', 'migrate', 'deploy'],
   subnetIds: ['subnet-1'],
@@ -154,9 +156,34 @@ describe('executeEcsTask', () => {
         .map(([cmd]) => cmd as { _type: string; _params: unknown })
         .find((cmd) => cmd._type === 'put-retention');
       expect(retention?._params).toEqual({
-        logGroupName: '/ecs/migrate-offers-service-migration',
+        logGroupName: '/ecs/myapp/migrate-offers-service',
         retentionInDays: 30,
       });
+    });
+
+    it('should register the given family and log to the given group', async () => {
+      mockEcs([
+        {
+          lastStatus: 'STOPPED',
+          containers: [{ name: 'migration', exitCode: 0 }],
+        },
+      ]);
+
+      await executeEcsTask(mockRuntime, options);
+
+      const register = mockEcsSend.mock.calls
+        .map(
+          ([cmd]) => cmd as { _type: string; _params: Record<string, unknown> },
+        )
+        .find((cmd) => cmd._type === 'register');
+      expect(register?._params.family).toBe('myapp-migrate-offers-service');
+      expect(
+        (
+          register?._params.containerDefinitions as {
+            logConfiguration: { options: Record<string, string> };
+          }[]
+        )[0].logConfiguration.options['awslogs-group'],
+      ).toBe('/ecs/myapp/migrate-offers-service');
     });
 
     it('should fail with the exit code and stop reason when the container exits non-zero', async () => {

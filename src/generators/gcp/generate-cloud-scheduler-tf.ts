@@ -8,8 +8,15 @@
  * so this file can be generated without services existing yet.
  */
 
-import type { ScheduledJobConfig } from '../../types/index.ts';
+import type { NamingScheme, ScheduledJobConfig } from '../../types/index.ts';
 import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
+import { buildGcpCloudRunName } from '../../utils/gcp/build-gcp-cloud-run-name.ts';
+import { GCP_SCHEDULER_PROJECT_DESCRIPTION_PREFIX } from '../../constants/resource-naming.ts';
+import {
+  DEFAULT_SCHEDULED_JOB_METHOD,
+  DEFAULT_SCHEDULED_JOB_TIMEZONE,
+  SCHEDULED_JOB_HTTP_TIMEOUT,
+} from '../../constants/index.ts';
 
 /**
  * Generate cloud-scheduler.tf content
@@ -23,7 +30,10 @@ import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
  * services to exist. Instead, deploy-schedulers sets them imperatively via
  * @google-cloud/run SDK (same pattern as setServiceInvokerPolicy for Kong/services).
  */
-export function generateCloudSchedulerTf(jobs: ScheduledJobConfig[]): string {
+export function generateCloudSchedulerTf(
+  jobs: ScheduledJobConfig[],
+  names: { projectName: string; naming: NamingScheme },
+): string {
   if (jobs.length === 0) {
     return `# No scheduled jobs configured
 # Add scheduledJobs in infrastructure.json to generate Cloud Scheduler resources
@@ -39,7 +49,12 @@ export function generateCloudSchedulerTf(jobs: ScheduledJobConfig[]): string {
   const serviceUriEntries = targetServices
     .map((service) => {
       const tfId = toTerraformId(service);
-      return `    ${tfId} = "https://${service}-\${data.google_project.current.number}.\${var.gcp_region}.run.app"`;
+      const cloudRunName = buildGcpCloudRunName(
+        names.projectName,
+        service,
+        names.naming,
+      );
+      return `    ${tfId} = "https://${cloudRunName}-\${data.google_project.current.number}.\${var.gcp_region}.run.app"`;
     })
     .join('\n');
 
@@ -55,14 +70,20 @@ ${serviceUriEntries}
     .map((job) => {
       const tfId = toTerraformId(job.name);
       const serviceTfId = toTerraformId(job.targetService);
-      const method = job.method || 'POST';
-      const timeout = job.httpTimeout || 300;
-      const timezone = job.timezone || 'UTC';
+      const method = job.method ?? DEFAULT_SCHEDULED_JOB_METHOD;
+      const timeout = job.httpTimeout ?? SCHEDULED_JOB_HTTP_TIMEOUT.gcp.default;
+      const timezone = job.timezone ?? DEFAULT_SCHEDULED_JOB_TIMEZONE;
+      // Unique scheme: the project, for discovery (jobs take no labels).
+      // Legacy environments get no new line, so their jobs stay unchanged.
+      const description =
+        names.naming === 'unique'
+          ? `\n  description = "${GCP_SCHEDULER_PROJECT_DESCRIPTION_PREFIX}${names.projectName}"`
+          : '';
 
       return `
 # Scheduled job: ${job.name}
 resource "google_cloud_scheduler_job" "${tfId}" {
-  name     = "${job.name}"
+  name     = "${buildGcpCloudRunName(names.projectName, job.name, names.naming)}"${description}
   schedule = "${job.schedule}"
   time_zone = "${timezone}"
 

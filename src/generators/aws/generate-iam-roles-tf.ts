@@ -35,9 +35,10 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Only what the deploys inject into containers: shared secrets (Kong, Next.js)
-# and each service's DATABASE_URL (services, migrations). Never the other
-# per-service secrets or the database master password.
+# Only what the deploys inject into containers: shared secrets (Kong, Next.js),
+# each service's DATABASE_URL (services) and MIGRATION_DATABASE_URL (only the
+# migration tasks' definitions name it). Never the other per-service secrets
+# or the database master password.
 resource "aws_iam_role_policy" "ecs_execution_secrets" {
   name = "secrets-access"
   role = aws_iam_role.ecs_execution.id
@@ -49,7 +50,8 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
       Action = ["secretsmanager:GetSecretValue"]
       Resource = concat(
         ["arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-shared-*"],
-        [for name in keys(var.services) : "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${name}-DATABASE_URL-??????" if name != "kong"]
+        [for name in keys(var.services) : "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${name}-DATABASE_URL-??????" if name != "kong"],
+        [for name in keys(var.services) : "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${name}-MIGRATION_DATABASE_URL-??????" if name != "kong"]
       )
     }]
   })
@@ -116,7 +118,9 @@ resource "aws_iam_role" "task" {
   tags = { Name = "\${var.project_name}-\${each.key}-task" }
 }
 
-# Kong reads no secrets at runtime: the execution role injects its three at start
+# Kong reads no secrets at runtime: the execution role injects its three at start.
+# The running service never reads its owner role's URL: only migrations change
+# the schema (the explicit Deny wins over the service's wildcard).
 resource "aws_iam_role_policy" "task_secrets" {
   for_each = { for name, service in var.services : name => service if name != "kong" }
 
@@ -125,14 +129,22 @@ resource "aws_iam_role_policy" "task_secrets" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = ["secretsmanager:GetSecretValue"]
-      Resource = [
-        "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-shared-*",
-        "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${each.key}-*"
-      ]
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-shared-*",
+          "arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${each.key}-*"
+        ]
+      },
+      {
+        Sid      = "NoOwnerUrl"
+        Effect   = "Deny"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:aws:secretsmanager:\${var.aws_region}:\${var.aws_account_id}:secret:\${var.project_name}-\${each.key}-MIGRATION_DATABASE_URL-??????"]
+      }
+    ]
   })
 }
 
