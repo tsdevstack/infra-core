@@ -19,6 +19,9 @@ export type {
   SPAConfig,
   WorkerConfig,
   ScheduledJobConfig,
+  ScheduledJobBase,
+  TriggerJobConfig,
+  CronJobConfig,
   FrontendHostingType,
   WafRateLimitConfig,
   GcpWafCustomRule,
@@ -30,6 +33,7 @@ export type {
   AzureInfraConfig,
   AppServicePlanScaling,
   AWSInfraConfig,
+  AwsCronJobTfConfig,
   GCPInfraConfig,
   InfraConfig,
   NamingScheme,
@@ -79,6 +83,9 @@ export { toDnsAuthName } from './utils/gcp/to-dns-auth-name.ts';
 // GCP utilities
 export { buildGCPClientOptions } from './utils/gcp/build-gcp-client-options.ts';
 export { buildGcpCloudRunName } from './utils/gcp/build-gcp-cloud-run-name.ts';
+export { buildGcpSchedulerAccountEmail } from './utils/gcp/build-gcp-scheduler-account-email.ts';
+export { isCronJob } from './utils/scheduled-jobs/is-cron-job.ts';
+export { isTriggerJob } from './utils/scheduled-jobs/is-trigger-job.ts';
 export { buildGcsStorageBucketName } from './utils/gcp/build-gcs-storage-bucket-name.ts';
 export { buildAzureStorageContainerName } from './utils/azure/build-azure-storage-container-name.ts';
 export { buildS3StorageBucketName } from './utils/aws/build-s3-storage-bucket-name.ts';
@@ -167,6 +174,8 @@ export type {
 } from './deploy/aws/ecs/update-ecs-service.ts';
 export { executeEcsTask } from './deploy/aws/ecs/execute-ecs-task.ts';
 export { readEcsTaskOutcome } from './deploy/aws/ecs/read-ecs-task-outcome.ts';
+export { registerEcsTaskDefinitionRevision } from './deploy/aws/ecs/register-ecs-task-definition-revision.ts';
+export { runEcsTaskAndWait } from './deploy/aws/ecs/run-ecs-task-and-wait.ts';
 export type { EcsTaskOutcome } from './deploy/aws/ecs/read-ecs-task-outcome.ts';
 export type {
   EcsTaskOptions,
@@ -221,6 +230,13 @@ export type {
   CloudRunServiceResult,
 } from './deploy/gcp/cloud-run-services.ts';
 export { executeCloudRunJob } from './deploy/gcp/cloud-run-jobs.ts';
+export { createOrUpdateCloudRunJob } from './deploy/gcp/create-or-update-cloud-run-job.ts';
+export type { CloudRunJobDefinitionOptions } from './deploy/gcp/create-or-update-cloud-run-job.ts';
+export { runCloudRunJobAndWait } from './deploy/gcp/run-cloud-run-job-and-wait.ts';
+export type {
+  RunCloudRunJobOptions,
+  RunCloudRunJobResult,
+} from './deploy/gcp/run-cloud-run-job-and-wait.ts';
 export type {
   CloudRunJobOptions,
   CloudRunJobResult,
@@ -252,6 +268,10 @@ export { buildFrontendEnvVars } from './deploy/shared/build-frontend-env-vars.ts
 export { buildFrontendSecrets } from './deploy/shared/build-frontend-secrets.ts';
 export { parseServiceFilter } from './deploy/shared/parse-service-filter.ts';
 export type { SecretConfig, BuildSecretNameFn } from './deploy/shared/types.ts';
+// Name case utilities
+export { toScreamingSnakeCase } from './utils/naming/to-screaming-snake-case.ts';
+export { toSnakeCase } from './utils/naming/to-snake-case.ts';
+export { toKebabCase } from './utils/naming/to-kebab-case.ts';
 // Credential name utilities
 export { toEnvVarPrefix } from './utils/credentials/to-env-var-prefix.ts';
 export { toServiceEnvVarName } from './utils/credentials/to-service-env-var-name.ts';
@@ -278,6 +298,26 @@ export {
   DEFAULT_SCHEDULED_JOB_METHOD,
   DEFAULT_SCHEDULED_JOB_TIMEZONE,
   SCHEDULED_JOB_HTTP_TIMEOUT,
+  SCHEDULED_JOB_TYPES,
+  CRON_JOB_TYPE,
+  TRIGGER_JOB_TYPE,
+  CRON_JOB_TIMEOUT,
+  CRON_JOB_PLATFORM_TIMEOUT_MARGIN_SECONDS,
+  CRON_JOB_NAME_PREFIX,
+  CRON_JOB_COMMAND,
+  CRON_JOB_NAME_ENV,
+  CRON_JOB_TIMEOUT_ENV,
+  CRON_FINISHED_MESSAGE,
+  CRON_JOB_NAME_PATTERN,
+  CRON_JOB_NAME_MAX_LENGTH,
+  CRON_ENTRY_FILE,
+  CRON_HANDLER_DIR,
+  CRON_HANDLER_SUFFIX,
+  APPS_DIR,
+  AWS_CRON_JOB_SERVICE_TAG,
+  AWS_CRON_JOB_NAME_TAG,
+  AWS_PROJECT_TAG,
+  AWS_CRON_JOB_LOG_STREAM_PREFIX,
   NAMING_SCHEMES,
   NAMING_SCHEME_OUTPUT,
   ACCOUNT_SUFFIX_LENGTH,

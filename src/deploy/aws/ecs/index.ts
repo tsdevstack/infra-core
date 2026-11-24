@@ -14,6 +14,8 @@ export type {
 } from './wait-for-ecs-stable.ts';
 export { executeEcsTask } from './execute-ecs-task.ts';
 export { readEcsTaskOutcome } from './read-ecs-task-outcome.ts';
+export { registerEcsTaskDefinitionRevision } from './register-ecs-task-definition-revision.ts';
+export { runEcsTaskAndWait } from './run-ecs-task-and-wait.ts';
 export type { EcsTaskOutcome } from './read-ecs-task-outcome.ts';
 export type { EcsTaskOptions, EcsTaskResult } from './execute-ecs-task.ts';
 export { deleteEcsService } from './delete-ecs-service.ts';

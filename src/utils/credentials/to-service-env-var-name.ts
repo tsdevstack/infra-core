@@ -1,3 +1,5 @@
+import { toScreamingSnakeCase } from '../naming/to-screaming-snake-case.ts';
+
 /**
  * Convert service name to full environment variable name format
  *
@@ -7,5 +9,5 @@
  * Used for service URL placeholders like ${AUTH_SERVICE_URL}
  */
 export function toServiceEnvVarName(serviceName: string): string {
-  return serviceName.toUpperCase().replace(/-/g, '_');
+  return toScreamingSnakeCase(serviceName);
 }

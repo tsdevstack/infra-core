@@ -75,6 +75,26 @@ describe('generateDashboardTf', () => {
     });
   });
 
+  describe('Cron jobs', () => {
+    it("should read the cron jobs' log groups for errors only", () => {
+      const widgets = parse(
+        generateDashboardTf({
+          projectName: 'shop',
+          backendNames: ['auth-service'],
+          cronJobNames: ['usage-report'],
+        }),
+      );
+      const query = (title: string) =>
+        widgets.find((w) => w.properties.title === title)?.properties.query;
+      expect(query('Errors in the logs')).toBe(
+        "SOURCE '/ecs/shop/auth-service' | SOURCE '/ecs/shop/cron-usage-report' | filter level = 'error' | fields @timestamp, service, msg | sort @timestamp desc | limit 50",
+      );
+      expect(
+        query('Requests and latency per service (from the logs)'),
+      ).not.toContain('cron-usage-report');
+    });
+  });
+
   describe('Edge cases', () => {
     it("should read the CloudFront WAF's metrics in us-east-1", () => {
       const waf = parse(

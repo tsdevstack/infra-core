@@ -29,6 +29,8 @@ export type {
 } from './ecs/update-ecs-service.ts';
 export { executeEcsTask } from './ecs/execute-ecs-task.ts';
 export { readEcsTaskOutcome } from './ecs/read-ecs-task-outcome.ts';
+export { registerEcsTaskDefinitionRevision } from './ecs/register-ecs-task-definition-revision.ts';
+export { runEcsTaskAndWait } from './ecs/run-ecs-task-and-wait.ts';
 export type { EcsTaskOutcome } from './ecs/read-ecs-task-outcome.ts';
 export type { EcsTaskOptions, EcsTaskResult } from './ecs/execute-ecs-task.ts';
 export { waitForEcsStable } from './ecs/wait-for-ecs-stable.ts';

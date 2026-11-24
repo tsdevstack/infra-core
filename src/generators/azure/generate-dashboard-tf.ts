@@ -113,7 +113,7 @@ function logQuery(
   };
 }
 
-/** Lines our services log at error or fatal (pino's level labels) */
+/** Lines our services and cron jobs log at error or fatal (pino's level labels); a cron job's lines carry its JobName */
 const ERROR_LINES =
   'ContainerAppConsoleLogs | where tostring(parse_json(Log).level) in ("error", "fatal")';
 
@@ -200,13 +200,13 @@ export function generateDashboardTf(options: AzureDashboardOptions): string {
     logQuery(
       'service-errors',
       'Error log lines',
-      `${ERROR_LINES} | summarize Errors = count() by bin(TimeGenerated, 5m), App = ContainerAppName | render timechart`,
+      `${ERROR_LINES} | summarize Errors = count() by bin(TimeGenerated, 5m), App = coalesce(ContainerAppName, JobName) | render timechart`,
       'timechart',
     ),
     logQuery(
       'service-error-lines',
       'Latest error log lines',
-      `${ERROR_LINES} | project TimeGenerated, App = ContainerAppName, Message = tostring(parse_json(Log).msg), Log | order by TimeGenerated desc | take 50`,
+      `${ERROR_LINES} | project TimeGenerated, App = coalesce(ContainerAppName, JobName), Message = tostring(parse_json(Log).msg), Log | order by TimeGenerated desc | take 50`,
       'table',
     ),
 

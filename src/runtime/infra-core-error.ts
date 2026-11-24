@@ -10,13 +10,16 @@ export class InfraCoreError extends Error {
    * @param message - The core error message
    * @param context - Where the error occurred (e.g., "Terraform generation")
    * @param hint - Optional hint about how to fix it
+   * @param options - The error this one wraps (`cause`), for callers that
+   *   act on its code
    */
   constructor(
     message: string,
     public context?: string,
     public hint?: string,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
     this.name = 'InfraCoreError';
   }
 

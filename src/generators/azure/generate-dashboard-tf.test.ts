@@ -81,6 +81,13 @@ describe('generateDashboardTf', () => {
       expect(content.resourceIds).toHaveLength(2);
     });
 
+    it("should name a cron job's error lines by its job, next to the apps", () => {
+      const content = item(generateDashboardTf(options), 'service-errors');
+      expect(content.query).toContain(
+        'App = coalesce(ContainerAppName, JobName)',
+      );
+    });
+
     it('should query error lines in the workspace', () => {
       const content = item(generateDashboardTf(options), 'service-errors');
 

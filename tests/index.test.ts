@@ -49,6 +49,17 @@ describe('InfraCoreError', () => {
     expect(error.hint).toBe('hint');
   });
 
+  it('should keep the error it wraps as the cause', () => {
+    const apiError = Object.assign(new Error('5 NOT_FOUND: no job'), {
+      code: 5,
+    });
+    const error = new InfraCoreError('msg', 'ctx', 'hint', {
+      cause: apiError,
+    });
+    expect(error.cause).toBe(apiError);
+    expect(new InfraCoreError('msg').cause).toBeUndefined();
+  });
+
   describe('format', () => {
     it('should format message only', () => {
       const error = new InfraCoreError('something broke');

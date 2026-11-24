@@ -72,6 +72,8 @@ export const AZURE_NAME_MAX_LENGTH = {
   redis: 63,
   /** Lowercase letters, digits and hyphens */
   postgresServer: 63,
+  /** Container App Jobs (`{project}-{job}`, `{project}-cron-{job}`): lowercase letters, digits and hyphens */
+  containerAppJob: 32,
 } as const;
 
 /** Hex characters of the hash that replaces the end of a name too long */

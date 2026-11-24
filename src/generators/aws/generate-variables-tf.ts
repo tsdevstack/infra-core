@@ -127,6 +127,21 @@ variable "scheduled_jobs" {
   default = {}
 }
 
+variable "cron_jobs" {
+  description = "Map of cron jobs: each runs its service's image as node dist/cron.js <name>"
+  type = map(object({
+    service   = string  # The service whose image and task role it runs with
+    schedule  = string  # EventBridge schedule expression (e.g., cron(0 3 * * ? *))
+    timezone  = string  # IANA time zone the schedule runs in
+    cpu       = number  # ECS CPU units
+    memory    = number  # MiB
+    timeout   = number  # Seconds a run may take (CRON_JOB_TIMEOUT)
+    dbPoolMax = number
+    logLevel  = string
+  }))
+  default = {}
+}
+
 # ─────────────────────────────────────────
 # Database (RDS PostgreSQL)
 # ─────────────────────────────────────────

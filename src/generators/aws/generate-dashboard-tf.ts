@@ -9,10 +9,14 @@
  * dashboards of an account are free, then $3 per dashboard per month.
  */
 
+import { CRON_JOB_NAME_PREFIX } from '../../constants/index.ts';
+
 interface AwsDashboardOptions {
   projectName: string;
   /** NestJS services and workers: their JSON request and error lines */
   backendNames: string[];
+  /** Cron jobs: their error lines only (they serve no requests) */
+  cronJobNames?: string[];
 }
 
 interface Widget {
@@ -77,6 +81,9 @@ export function generateDashboardTf(options: AwsDashboardOptions): string {
     '${aws_elasticache_replication_group.main.replication_group_id}-001';
   const logGroups = options.backendNames.map(
     (name) => `/ecs/${options.projectName}/${name}`,
+  );
+  const cronLogGroups = (options.cronJobNames ?? []).map(
+    (name) => `/ecs/${options.projectName}/${CRON_JOB_NAME_PREFIX}${name}`,
   );
 
   const widgets: Array<Omit<Widget, 'x' | 'y' | 'width' | 'height'>> = [
@@ -157,7 +164,7 @@ export function generateDashboardTf(options: AwsDashboardOptions): string {
       ),
       logWidget(
         'Errors in the logs',
-        logGroups,
+        [...logGroups, ...cronLogGroups],
         "filter level = 'error' | fields @timestamp, service, msg | sort @timestamp desc | limit 50",
       ),
     );

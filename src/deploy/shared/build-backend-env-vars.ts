@@ -3,6 +3,10 @@
  */
 
 import type { CloudProvider } from '../../types/credentials.ts';
+import {
+  CRON_JOB_NAME_ENV,
+  CRON_JOB_TIMEOUT_ENV,
+} from '../../constants/scheduled-jobs.ts';
 
 interface BackendEnvVarsConfig {
   provider: CloudProvider;
@@ -18,6 +22,8 @@ interface BackendEnvVarsConfig {
   workerName?: string;
   /** TRACE_SAMPLE_RATE (tracing.sampleRate); the service keeps every trace without it */
   traceSampleRate?: number;
+  /** A cron job's run: its name and the timeout the runner stops it at */
+  cronJob?: { name: string; timeoutSeconds: number };
 }
 
 export function buildBackendEnvVars(
@@ -38,6 +44,10 @@ export function buildBackendEnvVars(
   }
   if (config.traceSampleRate !== undefined) {
     envVars.TRACE_SAMPLE_RATE = String(config.traceSampleRate);
+  }
+  if (config.cronJob) {
+    envVars[CRON_JOB_NAME_ENV] = config.cronJob.name;
+    envVars[CRON_JOB_TIMEOUT_ENV] = String(config.cronJob.timeoutSeconds);
   }
 
   if (config.provider === 'gcp') {

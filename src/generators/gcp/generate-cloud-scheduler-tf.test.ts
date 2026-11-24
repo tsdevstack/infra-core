@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@rstest/core';
 import { generateCloudSchedulerTf } from './generate-cloud-scheduler-tf';
-import type { ScheduledJobConfig } from '../../types/index.ts';
+import type { CronJobConfig, TriggerJobConfig } from '../../types/index.ts';
 
 const LEGACY = { projectName: 'myapp', naming: 'legacy' } as const;
 
@@ -18,7 +18,7 @@ describe('generateCloudSchedulerTf', () => {
   });
 
   describe('service account', () => {
-    const jobs: ScheduledJobConfig[] = [
+    const jobs: TriggerJobConfig[] = [
       {
         name: 'cleanup-tokens',
         schedule: '0 */4 * * *',
@@ -41,7 +41,7 @@ describe('generateCloudSchedulerTf', () => {
   });
 
   describe('single job', () => {
-    const jobs: ScheduledJobConfig[] = [
+    const jobs: TriggerJobConfig[] = [
       {
         name: 'cleanup-tokens',
         schedule: '0 */4 * * *',
@@ -99,7 +99,7 @@ describe('generateCloudSchedulerTf', () => {
   });
 
   describe('job with custom options', () => {
-    const jobs: ScheduledJobConfig[] = [
+    const jobs: TriggerJobConfig[] = [
       {
         name: 'daily-report',
         schedule: '0 9 * * *',
@@ -128,7 +128,7 @@ describe('generateCloudSchedulerTf', () => {
   });
 
   describe('multiple jobs same service', () => {
-    const jobs: ScheduledJobConfig[] = [
+    const jobs: TriggerJobConfig[] = [
       {
         name: 'cleanup-tokens',
         schedule: '0 */4 * * *',
@@ -155,7 +155,7 @@ describe('generateCloudSchedulerTf', () => {
   });
 
   describe('multiple jobs different services', () => {
-    const jobs: ScheduledJobConfig[] = [
+    const jobs: TriggerJobConfig[] = [
       {
         name: 'cleanup-tokens',
         schedule: '0 */4 * * *',
@@ -181,7 +181,7 @@ describe('generateCloudSchedulerTf', () => {
 
   describe('header comment', () => {
     it('should include generation comment', () => {
-      const jobs: ScheduledJobConfig[] = [
+      const jobs: TriggerJobConfig[] = [
         {
           name: 'cleanup-tokens',
           schedule: '0 */4 * * *',
@@ -194,7 +194,7 @@ describe('generateCloudSchedulerTf', () => {
     });
 
     it('should mention SchedulerGuard', () => {
-      const jobs: ScheduledJobConfig[] = [
+      const jobs: TriggerJobConfig[] = [
         {
           name: 'cleanup-tokens',
           schedule: '0 */4 * * *',
@@ -209,7 +209,7 @@ describe('generateCloudSchedulerTf', () => {
 
   describe('snapshot', () => {
     it('should match snapshot for single job', () => {
-      const jobs: ScheduledJobConfig[] = [
+      const jobs: TriggerJobConfig[] = [
         {
           name: 'cleanup-tokens',
           schedule: '0 */4 * * *',
@@ -228,7 +228,7 @@ describe('generateCloudSchedulerTf', () => {
   });
 
   describe('naming scheme', () => {
-    const jobs: ScheduledJobConfig[] = [
+    const jobs: TriggerJobConfig[] = [
       {
         name: 'cleanup-tokens',
         schedule: '0 */4 * * *',
@@ -269,6 +269,75 @@ describe('generateCloudSchedulerTf', () => {
       expect(generateCloudSchedulerTf(jobs, LEGACY)).not.toContain(
         'description = "tsdevstack project',
       );
+    });
+  });
+  describe('cron jobs', () => {
+    const cronJobs: CronJobConfig[] = [
+      {
+        name: 'usage-report',
+        type: 'cron',
+        schedule: '0 3 * * *',
+        targetService: 'auth-service',
+      },
+    ];
+
+    it("should start the job's Cloud Run Job through the Admin API with an OAuth token and no retries", () => {
+      const result = generateCloudSchedulerTf([], LEGACY, cronJobs);
+
+      expect(result).toContain(
+        'resource "google_cloud_scheduler_job" "usage_report"',
+      );
+      expect(result).toContain('name     = "usage-report"');
+      expect(result).toContain(
+        'uri         = "https://run.googleapis.com/v2/projects/${data.google_project.current.project_id}/locations/${var.gcp_region}/jobs/cron-usage-report:run"',
+      );
+      expect(result).toContain('http_method = "POST"');
+      expect(result).toContain('oauth_token {');
+      expect(result).not.toContain('oidc_token');
+      expect(result).toContain('retry_count = 0');
+      expect(result).toContain('time_zone = "UTC"');
+      // The scheduler account is there, the service URI locals are not needed
+      expect(result).toContain('resource "google_service_account" "scheduler"');
+      expect(result).not.toContain('scheduler_service_uris');
+    });
+
+    it('should name the Cloud Run Job and the schedule after the project in the unique scheme', () => {
+      const result = generateCloudSchedulerTf(
+        [],
+        { projectName: 'myapp', naming: 'unique' },
+        cronJobs,
+      );
+
+      expect(result).toContain('name     = "myapp-usage-report"');
+      expect(result).toContain('/jobs/myapp-cron-usage-report:run');
+      expect(result).toContain('  description = "tsdevstack project: myapp"');
+    });
+
+    it('should put both kinds in one file', () => {
+      const triggers: TriggerJobConfig[] = [
+        {
+          name: 'cleanup-tokens',
+          schedule: '0 */4 * * *',
+          targetService: 'auth-service',
+          endpoint: '/jobs/cleanup-tokens',
+        },
+      ];
+      const result = generateCloudSchedulerTf(triggers, LEGACY, cronJobs);
+
+      expect(result).toContain(
+        'resource "google_cloud_scheduler_job" "cleanup_tokens"',
+      );
+      expect(result).toContain(
+        'resource "google_cloud_scheduler_job" "usage_report"',
+      );
+      expect(result).toContain('scheduler_service_uris');
+    });
+
+    it("should take the cron job's time zone", () => {
+      const result = generateCloudSchedulerTf([], LEGACY, [
+        { ...cronJobs[0], timezone: 'Europe/Budapest' },
+      ]);
+      expect(result).toContain('time_zone = "Europe/Budapest"');
     });
   });
 });

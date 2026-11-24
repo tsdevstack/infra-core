@@ -109,4 +109,32 @@ describe('buildBackendEnvVars', () => {
       expect(buildBackendEnvVars(base).TRACE_SAMPLE_RATE).toBeUndefined();
     });
   });
+  describe('Cron jobs', () => {
+    it("should pass the run's name and timeout to the runner", () => {
+      const result = buildBackendEnvVars({
+        provider: 'gcp',
+        projectName: 'my-project',
+        projectId: 'my-project-dev',
+        poolMax: 5,
+        cronJob: { name: 'usage-report', timeoutSeconds: 1800 },
+      });
+
+      expect(result.CRON_JOB_NAME).toBe('usage-report');
+      expect(result.CRON_JOB_TIMEOUT).toBe('1800');
+      expect(result.WORKER_NAME).toBeUndefined();
+    });
+
+    it('should set neither for a service', () => {
+      const result = buildBackendEnvVars({
+        provider: 'aws',
+        projectName: 'my-project',
+        projectId: '123456789012',
+        poolMax: 5,
+        awsRegion: 'eu-west-1',
+      });
+
+      expect(result).not.toHaveProperty('CRON_JOB_NAME');
+      expect(result).not.toHaveProperty('CRON_JOB_TIMEOUT');
+    });
+  });
 });

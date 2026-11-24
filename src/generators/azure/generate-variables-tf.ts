@@ -3,12 +3,13 @@
  */
 
 import type { AzureInfraConfig } from '../../types/config.ts';
+import { toTerraformId } from '../../utils/terraform/to-terraform-id.ts';
 
 export function generateVariablesTf(config: AzureInfraConfig): string {
   const serviceImageVars = Object.keys(config.services)
     .map(
       (name) => `
-variable "${name.replace(/-/g, '_')}_image" {
+variable "${toTerraformId(name)}_image" {
   description = "Docker image tag for ${name}"
   type        = string
   default     = "placeholder"
@@ -19,7 +20,7 @@ variable "${name.replace(/-/g, '_')}_image" {
   const workerImageVars = Object.keys(config.workers)
     .map(
       (name) => `
-variable "${name.replace(/-/g, '_')}_image" {
+variable "${toTerraformId(name)}_image" {
   description = "Docker image tag for ${name} worker"
   type        = string
   default     = "placeholder"

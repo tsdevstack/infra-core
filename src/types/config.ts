@@ -126,24 +126,54 @@ export interface WorkerConfig {
 }
 
 /**
- * Scheduled job configuration (Container App Jobs / EventBridge / Cloud Scheduler)
+ * What every scheduled job has, whichever kind. An entry in an environment's
+ * `scheduledJobs` is a trigger (today's kind: the schedule calls an endpoint
+ * of the service) or a cron job (`type: "cron"`: the schedule runs the
+ * service's own image as `node dist/cron.js <name>`).
  */
-export interface ScheduledJobConfig {
-  /** Job name (e.g., "cleanup-tokens") */
+export interface ScheduledJobBase {
+  /** Job name (e.g., "cleanup-tokens"); unique across the project, both kinds */
   name: string;
   /** Cron schedule (e.g., "0 0 * * *" for daily) */
   schedule: string;
-  /** Target service name (e.g., "auth-service") */
+  /** The service called (trigger) or whose image runs (cron job) */
   targetService: string;
+  /** Timezone (default: UTC) */
+  timezone?: string;
+}
+
+/**
+ * A trigger: the schedule calls an endpoint of the service (Cloud Scheduler,
+ * EventBridge + invoker Lambda, Container App Job with curl). An entry with
+ * an endpoint and no `type` is a trigger.
+ */
+export interface TriggerJobConfig extends ScheduledJobBase {
+  type?: 'trigger';
   /** Endpoint path (e.g., "/jobs/cleanup-tokens") */
   endpoint: string;
   /** HTTP method (default: POST) */
   method?: string;
   /** HTTP timeout in seconds (default: 300) */
   httpTimeout?: number;
-  /** Timezone (default: UTC) */
-  timezone?: string;
 }
+
+/**
+ * A cron job: the schedule runs the service's image as
+ * `node dist/cron.js <name>` (Cloud Run Job, ECS task, Container App Job),
+ * one task, to completion
+ */
+export interface CronJobConfig extends ScheduledJobBase {
+  type: 'cron';
+  /** Seconds a run may take before it is stopped (default: 600) */
+  timeout?: number;
+  /** CPU of the run, the migration job's values and default */
+  cpu?: string;
+  /** Memory of the run, the migration job's values and default */
+  memory?: string;
+}
+
+/** An entry of an environment's `scheduledJobs` */
+export type ScheduledJobConfig = TriggerJobConfig | CronJobConfig;
 
 /**
  * Frontend hosting type
@@ -309,8 +339,11 @@ export interface BaseInfraConfig {
   // Storage
   storageBuckets: string[];
 
-  // Scheduling
-  scheduledJobs: Record<string, ScheduledJobConfig>;
+  // Scheduling: the triggers. A cron job's resources are each provider's own
+  // (the GCP schedule and the AWS task definition and schedule in Terraform,
+  // AWSInfraConfig.cronJobs; the Cloud Run Job and the whole Azure job
+  // through the SDK)
+  scheduledJobs: Record<string, TriggerJobConfig>;
 
   // Registry
   /** Map of all deployables (services + workers + kong) for container registry */
@@ -370,12 +403,35 @@ export interface AzureInfraConfig extends BaseInfraConfig {
   databaseServiceKeyVaults: Record<string, string>;
 }
 
+/**
+ * A cron job on AWS as Terraform gets it (var.cron_jobs, keyed by the job's
+ * name): its ECS task definition, log group and EventBridge schedule
+ */
+export interface AwsCronJobTfConfig {
+  /** The service whose image and task role it runs with */
+  service: string;
+  /** EventBridge schedule expression (`cron(...)`) */
+  schedule: string;
+  /** IANA time zone the schedule runs in */
+  timezone: string;
+  /** ECS CPU units */
+  cpu: number;
+  /** Memory in MiB */
+  memory: string;
+  /** Seconds a run may take (CRON_JOB_TIMEOUT in the container) */
+  timeout: number;
+  dbPoolMax: number;
+  logLevel: string;
+}
+
 export interface AWSInfraConfig extends BaseInfraConfig {
   provider: 'aws';
   accountId: string;
   region: string;
   stateBucket: string;
   lockTable: string;
+  /** The cron jobs (cron-jobs.tf); none when left out */
+  cronJobs?: Record<string, AwsCronJobTfConfig>;
 }
 
 export interface GCPInfraConfig extends BaseInfraConfig {

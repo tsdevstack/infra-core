@@ -1,24 +1,28 @@
 /**
- * Set IAM bindings for Cloud Scheduler to invoke Cloud Run services
+ * Set IAM bindings for Cloud Scheduler to invoke Cloud Run services and jobs
  *
- * Grants the scheduler service account roles/run.invoker on each target service.
- * Uses @google-cloud/run SDK.
+ * Grants the scheduler service account roles/run.invoker on each target
+ * service (a trigger's endpoint) and each target job (a cron job's Cloud Run
+ * Job, started through the Admin API's run method). Uses @google-cloud/run SDK.
  *
  * This is done outside Terraform so cloud-scheduler.tf has no dependency
  * on existing Cloud Run services and can always be generated.
  */
 
-import { ServicesClient } from '@google-cloud/run';
+import { JobsClient, ServicesClient } from '@google-cloud/run';
 import type { InfraCoreRuntime } from '../../types/runtime.ts';
 import type { GCPCredentials } from '../../types/credentials.ts';
 import { buildGCPClientOptions } from '../../utils/gcp/build-gcp-client-options.ts';
+import { buildGcpSchedulerAccountEmail } from '../../utils/gcp/build-gcp-scheduler-account-email.ts';
 
 export interface SetSchedulerInvokerBindingsOptions {
   projectId: string;
   projectName: string;
   region: string;
-  /** Cloud Run names of the services the jobs call (buildGcpCloudRunName) */
+  /** Cloud Run names of the services the triggers call (buildGcpCloudRunName) */
   targetServices: string[];
+  /** Cloud Run Job names the cron jobs' schedules start (`{project}-cron-{name}`) */
+  targetJobs?: string[];
   credentials: GCPCredentials;
 }
 
@@ -29,18 +33,44 @@ export async function setSchedulerInvokerBindings(
   runtime: InfraCoreRuntime,
   options: SetSchedulerInvokerBindingsOptions,
 ): Promise<void> {
-  const client = new ServicesClient(buildGCPClientOptions(options.credentials));
-  const schedulerSaEmail = `${options.projectName}-scheduler@${options.projectId}.iam.gserviceaccount.com`;
+  const clientOptions = buildGCPClientOptions(options.credentials);
+  const client = new ServicesClient(clientOptions);
+  const schedulerSaEmail = buildGcpSchedulerAccountEmail(
+    options.projectName,
+    options.projectId,
+  );
   const member = `serviceAccount:${schedulerSaEmail}`;
   const role = 'roles/run.invoker';
 
-  for (const serviceName of options.targetServices) {
-    const resource = client.servicePath(
+  const targets: Array<{
+    name: string;
+    resource: string;
+    client: Pick<ServicesClient, 'getIamPolicy' | 'setIamPolicy'>;
+  }> = options.targetServices.map((serviceName) => ({
+    name: serviceName,
+    resource: client.servicePath(
       options.projectId,
       options.region,
       serviceName,
-    );
+    ),
+    client,
+  }));
+  if (options.targetJobs && options.targetJobs.length > 0) {
+    const jobsClient = new JobsClient(clientOptions);
+    for (const jobName of options.targetJobs) {
+      targets.push({
+        name: jobName,
+        resource: jobsClient.jobPath(
+          options.projectId,
+          options.region,
+          jobName,
+        ),
+        client: jobsClient,
+      });
+    }
+  }
 
+  for (const { name: serviceName, resource, client } of targets) {
     try {
       const [currentPolicy] = await client.getIamPolicy({ resource });
 

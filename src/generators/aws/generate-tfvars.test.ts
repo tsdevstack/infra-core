@@ -217,6 +217,42 @@ describe('generateTfvars', () => {
     });
   });
 
+  describe('cron_jobs map', () => {
+    it('should output an empty cron_jobs map without cron jobs', () => {
+      expect(generateTfvars(baseConfig)).toContain('cron_jobs = {}');
+    });
+
+    it('should format each cron job by its name', () => {
+      const result = generateTfvars({
+        ...baseConfig,
+        cronJobs: {
+          'usage-report': {
+            service: 'auth-service',
+            schedule: 'cron(0 3 * * ? *)',
+            timezone: 'Europe/Budapest',
+            cpu: 1024,
+            memory: '2048',
+            timeout: 1800,
+            dbPoolMax: 7,
+            logLevel: 'info',
+          },
+        },
+      });
+      expect(result).toContain(`cron_jobs = {
+  "usage-report" = {
+    service   = "auth-service"
+    schedule  = "cron(0 3 * * ? *)"
+    timezone  = "Europe/Budapest"
+    cpu       = 1024
+    memory    = 2048
+    timeout   = 1800
+    dbPoolMax = 7
+    logLevel  = "info"
+  }
+}`);
+    });
+  });
+
   describe('scheduled_jobs map', () => {
     it('should output empty scheduled_jobs map', () => {
       const result = generateTfvars(baseConfig);

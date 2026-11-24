@@ -90,6 +90,9 @@ scheduled_jobs = {
   }
 }
 
+# Cron Jobs (an ECS task started by its schedule)
+cron_jobs = {}
+
 # Database (RDS PostgreSQL)
 db_instance_class            = "db.t3.micro"
 database_storage_size        = 20
@@ -133,6 +136,9 @@ nextjs_services = {}
 
 # Scheduled Jobs
 scheduled_jobs = {}
+
+# Cron Jobs (an ECS task started by its schedule)
+cron_jobs = {}
 
 # Database (RDS PostgreSQL)
 db_instance_class            = "db.t3.micro"

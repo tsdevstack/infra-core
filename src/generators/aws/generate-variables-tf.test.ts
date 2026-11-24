@@ -84,6 +84,17 @@ describe('generateVariablesTf', () => {
       expect(result).toContain('timeoutSeconds = number');
       expect(result).toContain('timezone       = string');
     });
+
+    it('should define the cron_jobs map variable, empty by default', () => {
+      const result = generateVariablesTf([]);
+      const cronJobs = result.slice(result.indexOf('variable "cron_jobs"'));
+      expect(cronJobs).toContain('service   = string');
+      expect(cronJobs).toContain('timeout   = number');
+      expect(cronJobs).toContain('dbPoolMax = number');
+      expect(cronJobs.slice(0, cronJobs.indexOf('\n}\n'))).toContain(
+        'default = {}',
+      );
+    });
   });
 
   describe('database variables', () => {

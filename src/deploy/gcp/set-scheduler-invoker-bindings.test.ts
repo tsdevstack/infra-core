@@ -7,11 +7,23 @@ const mockServicePath = rs.fn(
     `projects/${project}/locations/${location}/services/${service}`,
 );
 
+const mockJobGetIamPolicy = rs.fn();
+const mockJobSetIamPolicy = rs.fn();
+const mockJobPath = rs.fn(
+  (project: string, location: string, job: string) =>
+    `projects/${project}/locations/${location}/jobs/${job}`,
+);
+
 rs.mock('@google-cloud/run', () => ({
   ServicesClient: rs.fn().mockImplementation(() => ({
     getIamPolicy: mockGetIamPolicy,
     setIamPolicy: mockSetIamPolicy,
     servicePath: mockServicePath,
+  })),
+  JobsClient: rs.fn().mockImplementation(() => ({
+    getIamPolicy: mockJobGetIamPolicy,
+    setIamPolicy: mockJobSetIamPolicy,
+    jobPath: mockJobPath,
   })),
 }));
 
@@ -195,5 +207,45 @@ describe('setSchedulerInvokerBindings', () => {
 
     expect(mockGetIamPolicy).not.toHaveBeenCalled();
     expect(mockSetIamPolicy).not.toHaveBeenCalled();
+  });
+  describe('Cloud Run Jobs (cron jobs)', () => {
+    beforeEach(() => {
+      mockJobGetIamPolicy.mockResolvedValue([{ bindings: [] }]);
+      mockJobSetIamPolicy.mockResolvedValue([{}]);
+    });
+
+    it("should grant run.invoker on each cron job's Cloud Run Job", async () => {
+      await setSchedulerInvokerBindings(mockRuntime, {
+        ...baseOptions,
+        targetJobs: ['my-app-cron-usage-report'],
+      });
+
+      const jobResource =
+        'projects/my-project/locations/us-central1/jobs/my-app-cron-usage-report';
+      expect(mockJobGetIamPolicy).toHaveBeenCalledWith({
+        resource: jobResource,
+      });
+      expect(mockJobSetIamPolicy).toHaveBeenCalledWith({
+        resource: jobResource,
+        policy: expect.objectContaining({
+          bindings: [{ role: 'roles/run.invoker', members: [expectedMember] }],
+        }),
+      });
+      // The service binding still happens
+      expect(mockSetIamPolicy).toHaveBeenCalledWith(
+        expect.objectContaining({ resource: expectedResource }),
+      );
+      expect(mockRuntime.logger.success).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'scheduler can invoke my-app-cron-usage-report',
+        ),
+      );
+    });
+
+    it('should not touch the jobs API without target jobs', async () => {
+      await setSchedulerInvokerBindings(mockRuntime, baseOptions);
+
+      expect(mockJobGetIamPolicy).not.toHaveBeenCalled();
+    });
   });
 });

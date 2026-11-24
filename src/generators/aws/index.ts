@@ -30,6 +30,7 @@ export { generateAcmTf } from './generate-acm-tf.ts';
 export { generateRoute53Tf } from './generate-route53-tf.ts';
 export { generateS3SpaTf } from './generate-s3-spa-tf.ts';
 export { generateEventbridgeTf } from './generate-eventbridge-tf.ts';
+export { generateCronJobsTf } from './generate-cron-jobs-tf.ts';
 export { generateNextjsCloudfrontTf } from './generate-nextjs-cloudfront-tf.ts';
 export { generateRedirectTf } from './generate-redirect-tf.ts';
 export { generateJobInvokerLambdaCode } from './generate-job-invoker-lambda-code.ts';
